@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CredVerify</title>
+  <link rel="icon" type="image/png" sizes="512x512" href="../picture/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap"
+    rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
+  <style>
+    :root {
+      --ink: #16202B;
+      --ink-soft: #5A6975;
+      --ground: #E9EDF0;
+      --surface: #FFFFFF;
+      --rule: #C7D0D7;
+      --rule-soft: #E1E7EB;
+      --seal: #A32B2B;
+      --valid: #1B6B58;
+      --pending: #8A6A1F;
+      --radius: 2px;
+    }
+
+    * {
+      box-sizing: border-box
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0
+    }
+
+    body {
+      background: var(--ground);
+      color: var(--ink);
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
+      font-size: 15px;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .mono {
+      font-family: 'IBM Plex Mono', ui-monospace, monospace
+    }
+
+    /* ---------- Masthead ---------- */
+    header {
+      border-bottom: 2px solid var(--ink);
+      background: var(--surface);
+    }
+
+    .masthead {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 22px 24px 16px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .brand h1 {
+      font-family: 'IBM Plex Serif', Georgia, serif;
+      font-weight: 600;
+      font-size: 27px;
+      margin: 0;
+      letter-spacing: -0.01em;
+    }
+
+    .brand p {
+      margin: 2px 0 0;
+      color: var(--ink-soft);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+    }
+
+    .conn {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap
+    }
+
+    .chip {
+      border: 1px solid var(--rule);
+      padding: 5px 9px;
+      border-radius: var(--radius);
+      font-size: 12px;
+      background: var(--surface);
+    }
+
+    .chip b {
+      font-weight: 500;
+      color: var(--ink-soft);
+      font-weight: 400
+    }
+
+    /* ---------- Buttons ---------- */
+    button {
+      font-family: inherit;
+      font-size: 14px;
+      cursor: pointer;
+      border-radius: var(--radius);
+      border: 1px solid var(--ink);
+      background: var(--ink);
+      color: #fff;
+      padding: 9px 16px;
+      transition: opacity .12s ease;
+    }
+
+    button:hover:not(:disabled) {
+      opacity: .85
+    }
+
+    button:disabled {
+      opacity: .4;
+      cursor: not-allowed
+    }
+
+    button.ghost {
+      background: transparent;
+      color: var(--ink)
+    }
+
+    button.small {
+      padding: 5px 10px;
+      font-size: 12.5px
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--seal);
+      outline-offset: 2px
+    }
+
+    /* ---------- Layout ---------- */
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 22px 24px 60px;
+      display: grid;
+      grid-template-columns: 1fr 372px;
+      gap: 26px;
+      align-items: start
+    }
+
+    @media(max-width:1000px) {
+      main {
+        grid-template-columns: 1fr
+      }
+    }
+
+    nav {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--rule);
+      margin-bottom: 22px;
+      flex-wrap: wrap
+    }
+
+    nav button {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--ink-soft);
+      padding: 9px 15px 8px;
+      font-size: 14px;
+      margin-bottom: -1px;
+      border-radius: 0;
+    }
+
+    nav button.on {
+      color: var(--ink);
+      border-bottom-color: var(--seal);
+      font-weight: 500
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--rule);
+      border-radius: var(--radius);
+      padding: 22px
+    }
+
+    .panel h2 {
+      font-family: 'IBM Plex Serif', serif;
+      font-size: 19px;
+      margin: 0 0 4px
+    }
+
+    .panel .lede {
+      color: var(--ink-soft);
+      font-size: 13.5px;
+      margin: 0 0 20px
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--ink-soft);
+      margin: 0 0 5px
+    }
+
+    .hint {
+      font-size: 12.5px;
+      color: var(--ink-soft);
+      margin: 5px 0 0
+    }
+
+    input[type=text],
+    input[type=file] {
+      width: 100%;
+      padding: 9px 10px;
+      border: 1px solid var(--rule);
+      border-radius: var(--radius);
+      font-family: inherit;
+      font-size: 14px;
+      background: var(--surface);
+      color: var(--ink);
+    }
+
+    input.mono {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12.5px
+    }
+
+    input:focus {
+      outline: none;
+      border-color: var(--ink)
+    }
+
+    .field {
+      margin-bottom: 16px
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px
+    }
+
+    @media(max-width:620px) {
+      .row {
+        grid-template-columns: 1fr
+      }
+    }
+
+    /* ---------- Result card ---------- */
+    .verdict {
+      border: 1px solid var(--rule);
+      border-left-width: 4px;
+      padding: 15px 17px;
+      margin-top: 20px;
+      border-radius: var(--radius)
+    }
+
+    .verdict.valid {
+      border-left-color: var(--valid)
+    }
+
+    .verdict.invalid {
+      border-left-color: var(--seal)
+    }
+
+    .verdict.none {
+      border-left-color: var(--ink-soft)
+    }
+
+    .verdict h3 {
+      margin: 0 0 3px;
+      font-size: 16px;
+      font-family: 'IBM Plex Serif', serif
+    }
+
+    .verdict.valid h3 {
+      color: var(--valid)
+    }
+
+    .verdict.invalid h3 {
+      color: var(--seal)
+    }
+
+    .verdict p {
+      margin: 0;
+      font-size: 13.5px;
+      color: var(--ink-soft)
+    }
+
+    dl {
+      margin: 14px 0 0;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 6px 16px;
+      font-size: 12.5px
+    }
+
+    dt {
+      color: var(--ink-soft)
+    }
+
+    dd {
+      margin: 0;
+      font-family: 'IBM Plex Mono', monospace;
+      word-break: break-all
+    }
+
+    .status-tag {
+      display: inline-block;
+      font-size: 11px;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border: 1px solid currentColor;
+      border-radius: var(--radius)
+    }
+
+    .t-issued {
+      color: var(--valid)
+    }
+
+    .t-revoked {
+      color: var(--seal)
+    }
+
+    .t-none {
+      color: var(--ink-soft)
+    }
+
+    /* ---------- Table ---------- */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin-top: 6px
+    }
+
+    th {
+      text-align: left;
+      font-weight: 500;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: var(--ink-soft);
+      border-bottom: 1px solid var(--rule);
+      padding: 7px 8px 7px 0
+    }
+
+    td {
+      padding: 10px 8px 10px 0;
+      border-bottom: 1px solid var(--rule-soft);
+      vertical-align: top
+    }
+
+    .empty {
+      color: var(--ink-soft);
+      font-size: 13.5px;
+      padding: 22px 0;
+      text-align: center
+    }
+
+    /* ---------- Evidence ledger (signature element) ---------- */
+    aside {
+      position: sticky;
+      top: 22px
+    }
+
+    .ledger {
+      background: var(--surface);
+      border: 1px solid var(--ink);
+      border-radius: var(--radius);
+      overflow: hidden
+    }
+
+    .ledger-head {
+      border-bottom: 1px solid var(--ink);
+      padding: 13px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    .ledger-head h2 {
+      font-family: 'IBM Plex Serif', serif;
+      font-size: 15px;
+      margin: 0
+    }
+
+    .ledger-head span {
+      font-size: 11.5px;
+      color: var(--ink-soft);
+      text-transform: uppercase;
+      letter-spacing: .07em
+    }
+
+    .ledger-body {
+      max-height: 60vh;
+      overflow-y: auto
+    }
+
+    .entry {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--rule-soft);
+      font-size: 12.5px
+    }
+
+    .entry:last-child {
+      border-bottom: none
+    }
+
+    .entry-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 5px
+    }
+
+    .entry-op {
+      font-weight: 500
+    }
+
+    .entry-time {
+      color: var(--ink-soft);
+      font-size: 11.5px
+    }
+
+    .entry dl {
+      margin-top: 6px;
+      font-size: 11.5px;
+      gap: 3px 12px
+    }
+
+    .entry .fail {
+      color: var(--seal)
+    }
+
+    .ledger-foot {
+      padding: 11px 16px;
+      border-top: 1px solid var(--ink);
+      display: flex;
+      gap: 8px
+    }
+
+    .note {
+      font-size: 12.5px;
+      color: var(--ink-soft);
+      border-left: 2px solid var(--rule);
+      padding-left: 11px;
+      margin-top: 18px
+    }
+
+    .banner {
+      background: #FBF6E9;
+      border: 1px solid #E0D2A8;
+      padding: 11px 14px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      margin-bottom: 18px
+    }
+
+    .banner.err {
+      background: #FBEDED;
+      border-color: #E3BEBE;
+      color: #7A2020
+    }
+
+    .hidden {
+      display: none
+    }
+
+    @media (prefers-reduced-motion:reduce) {
+      * {
+        transition: none !important
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <div class="masthead">
+      <div class="brand">
+        <h1>CredVerify</h1>
+        <p>Sổ đăng bạ chứng chỉ đào tạo</p>
+      </div>
+      <div class="conn">
+        <span class="chip" id="chipNet"><b>Mạng</b> —</span>
+        <span class="chip mono" id="chipAcct">chưa kết nối</span>
+        <span class="chip" id="chipRole"><b>Vai trò</b> —</span>
+        <button id="btnConnect">Kết nối ví</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div>
+      <div class="banner" id="setupBanner">
+        Dán địa chỉ contract đã deploy vào ô bên dưới, rồi bấm Kết nối ví.
+        <div class="field" style="margin:10px 0 0">
+          <input type="text" class="mono" id="inpContract" placeholder="0x5521B2315678afecb367f032d93F2514ba1251a1">
+        </div>
+        <button class="small" id="btnSaveContract" style="margin-top:9px">Lưu địa chỉ contract</button>
+      </div>
+
+      <nav>
+        <button class="on" data-tab="issue">Cấp chứng chỉ</button>
+        <button data-tab="verify">Xác minh</button>
+        <button data-tab="manage">Tra cứu &amp; thu hồi</button>
+        <button data-tab="admin">Quản trị đơn vị phát hành</button>
+      </nav>
+
+      <!-- ===== CẤP ===== -->
+      <section class="panel" id="tab-issue">
+        <h2>Cấp chứng chỉ</h2>
+        <p class="lede">Dành cho đơn vị đào tạo. Hệ thống chỉ ghi lên blockchain mã chứng chỉ, hash của tệp và địa chỉ
+          ví học viên — không ghi họ tên hay tệp gốc.</p>
+
+        <div class="field">
+          <label for="isCertId">Mã chứng chỉ</label>
+          <input type="text" id="isCertId" placeholder="KHOAHOC-2026-0001">
+          <p class="hint">Mã do đơn vị đặt, phải là duy nhất. Hệ thống băm mã này thành certId trên chuỗi.</p>
+        </div>
+
+        <div class="field">
+          <label for="isFile">Tệp chứng chỉ (PDF hoặc ảnh)</label>
+          <input type="file" id="isFile">
+          <p class="hint" id="isHashOut">Chưa chọn tệp. Hash được tính ngay trên máy, tệp không được tải lên đâu cả.
+          </p>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label for="isHolder">Ví học viên</label>
+            <input type="text" class="mono" id="isHolder" placeholder="0x…">
+          </div>
+          <div class="field">
+            <label for="isName">Tên học viên <span style="text-transform:none;letter-spacing:0">(lưu
+                off-chain)</span></label>
+            <input type="text" id="isName" placeholder="Nguyễn Văn A">
+          </div>
+        </div>
+        <div class="field">
+          <label for="isCourse">Tên khóa học <span style="text-transform:none;letter-spacing:0">(lưu
+              off-chain)</span></label>
+          <input type="text" id="isCourse" placeholder="Lập trình Web cơ bản — 60 giờ">
+        </div>
+
+        <button id="btnIssue">Cấp chứng chỉ</button>
+        <div id="issueOut"></div>
+
+        <p class="note">Hai ô "lưu off-chain" được giữ trong bộ nhớ trình duyệt để mô phỏng cơ sở dữ liệu của đơn vị đào
+          tạo. Trong hệ thống thật, đây phải là máy chủ có kiểm soát truy cập và mã hóa.</p>
+      </section>
+
+      <!-- ===== XÁC MINH ===== -->
+      <section class="panel hidden" id="tab-verify">
+        <h2>Xác minh chứng chỉ</h2>
+        <p class="lede">Dành cho nhà tuyển dụng. Nhập mã chứng chỉ và chọn tệp ứng viên nộp — hệ thống đối chiếu hash và
+          trạng thái trên chuỗi.</p>
+
+        <div class="field">
+          <label for="vfCertId">Mã chứng chỉ</label>
+          <input type="text" id="vfCertId" placeholder="KHOAHOC-2026-0001">
+        </div>
+        <div class="field">
+          <label for="vfFile">Tệp cần kiểm tra</label>
+          <input type="file" id="vfFile">
+          <p class="hint" id="vfHashOut">Chưa chọn tệp.</p>
+        </div>
+
+        <button id="btnVerify">Xác minh</button>
+        <div id="verifyOut"></div>
+      </section>
+
+      <!-- ===== TRA CỨU & THU HỒI ===== -->
+      <section class="panel hidden" id="tab-manage">
+        <h2>Tra cứu &amp; thu hồi</h2>
+        <p class="lede">Danh sách chứng chỉ đã cấp từ trình duyệt này. Chỉ đúng ví đã cấp mới thu hồi được chứng chỉ đó.
+        </p>
+        <div id="listOut"></div>
+        <button class="ghost small" id="btnRefresh" style="margin-top:16px">Làm mới trạng thái từ chuỗi</button>
+      </section>
+
+      <!-- ===== QUẢN TRỊ ===== -->
+      <section class="panel hidden" id="tab-admin">
+        <h2>Quản trị đơn vị phát hành</h2>
+        <p class="lede">Dành cho chủ sở hữu contract. Cấp hoặc thu quyền phát hành của một đơn vị đào tạo.</p>
+        <div class="field">
+          <label for="adAddr">Địa chỉ ví đơn vị</label>
+          <input type="text" class="mono" id="adAddr" placeholder="0x…">
+        </div>
+        <div style="display:flex;gap:9px;flex-wrap:wrap">
+          <button id="btnAddIssuer">Cấp quyền phát hành</button>
+          <button class="ghost" id="btnRemoveIssuer">Thu quyền phát hành</button>
+          <button class="ghost" id="btnCheckIssuer">Kiểm tra quyền</button>
+        </div>
+        <div id="adminOut"></div>
+
+        <p class="note">Thu quyền chỉ chặn việc cấp chứng chỉ mới. Đơn vị vẫn thu hồi được các chứng chỉ họ đã cấp trước
+          đó — đây là lựa chọn thiết kế, cần nêu rõ trong báo cáo.</p>
+      </section>
+    </div>
+
+    <!-- ===== NHẬT KÝ BẰNG CHỨNG ===== -->
+    <aside>
+      <div class="ledger">
+        <div class="ledger-head">
+          <h2>Nhật ký bằng chứng</h2>
+          <span id="ledgerCount">0 mục</span>
+        </div>
+        <div class="ledger-body" id="ledgerBody">
+          <p class="empty">Mọi giao dịch và thao tác bị chặn sẽ được ghi lại ở đây kèm mã giao dịch, số block và lượng
+            gas.</p>
+        </div>
+        <div class="ledger-foot">
+          <button class="small" id="btnExport">Xuất EVIDENCE.md</button>
+          <button class="small ghost" id="btnClearLedger">Xóa nhật ký</button>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <script>
+    const ABI = [
+      "function owner() view returns (address)",
+      "function isIssuer(address) view returns (bool)",
+      "function addIssuer(address issuerAddress)",
+      "function removeIssuer(address issuerAddress)",
+      "function issueCertificate(bytes32 certId, bytes32 certHash, address holder)",
+      "function revokeCertificate(bytes32 certId)",
+      "function verifyCertificate(bytes32 certId, bytes32 providedHash) view returns (bool valid, uint8 status, address issuer, address holder, uint256 issuedAt)",
+      "function certificates(bytes32) view returns (bytes32 certHash, address issuer, address holder, uint8 status, uint256 issuedAt)",
+      "event CertificateIssued(bytes32 indexed certId, bytes32 certHash, address indexed issuer, address indexed holder, uint256 issuedAt)",
+      "event CertificateRevoked(bytes32 indexed certId, address indexed issuer, uint256 revokedAt)"
+    ];
+
+    const STATUS_LABEL = ["Chưa tồn tại", "Còn hiệu lực", "Đã thu hồi"];
+    const STATUS_CLASS = ["t-none", "t-issued", "t-revoked"];
+    const KEY_CONTRACT = "credverify.contract";
+    const KEY_STORE = "credverify.offchain";
+    const KEY_LEDGER = "credverify.ledger";
+
+    let provider, signer, contract, account, contractAddress;
+
+    /* ---------- tiện ích ---------- */
+    const $ = (id) => document.getElementById(id);
+    const short = (s, head = 10, tail = 8) =>
+      !s ? "—" : (s.length <= head + tail + 2 ? s : s.slice(0, head) + "…" + s.slice(-tail));
+    const toId = (raw) => ethers.keccak256(ethers.toUtf8Bytes(raw.trim()));
+
+    function readJSON(key, fallback) {
+      try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+      catch { return fallback; }
+    }
+    function writeJSON(key, val) {
+      try { localStorage.setItem(key, JSON.stringify(val)); } catch { }
+    }
+
+    function banner(target, text, isError) {
+      $(target).innerHTML =
+        '<div class="banner' + (isError ? " err" : "") + '" style="margin:18px 0 0">' + text + "</div>";
+    }
+
+    /* ---------- nhật ký bằng chứng ---------- */
+    function logEntry(entry) {
+      const all = readJSON(KEY_LEDGER, []);
+      all.unshift(Object.assign({ at: new Date().toISOString() }, entry));
+      writeJSON(KEY_LEDGER, all.slice(0, 200));
+      renderLedger();
+    }
+
+    function renderLedger() {
+      const all = readJSON(KEY_LEDGER, []);
+      $("ledgerCount").textContent = all.length + " mục";
+      if (!all.length) {
+        $("ledgerBody").innerHTML =
+          '<p class="empty">Mọi giao dịch và thao tác bị chặn sẽ được ghi lại ở đây kèm mã giao dịch, số block và lượng gas.</p>';
+        return;
+      }
+      $("ledgerBody").innerHTML = all.map((e) => {
+        const rows = [];
+        if (e.txHash) rows.push(["Tx", short(e.txHash, 12, 10)]);
+        if (e.block != null) rows.push(["Block", e.block]);
+        if (e.gas) rows.push(["Gas", e.gas]);
+        if (e.certId) rows.push(["certId", short(e.certId, 12, 10)]);
+        if (e.detail) rows.push(["Chi tiết", e.detail]);
+        if (e.reason) rows.push(["Lý do", e.reason]);
+        return '<div class="entry">' +
+          '<div class="entry-top">' +
+          '<span class="entry-op' + (e.ok === false ? " fail" : "") + '">' +
+          (e.ok === false ? "✕ " : "") + e.op +
+          "</span>" +
+          '<span class="entry-time">' + new Date(e.at).toLocaleTimeString("vi-VN") + "</span>" +
+          "</div>" +
+          (rows.length
+            ? "<dl>" + rows.map(([k, v]) => "<dt>" + k + "</dt><dd>" + v + "</dd>").join("") + "</dl>"
+            : "") +
+          "</div>";
+      }).join("");
+    }
+
+    function exportEvidence() {
+      const all = readJSON(KEY_LEDGER, []).slice().reverse();
+      if (!all.length) { alert("Nhật ký đang trống. Hãy thực hiện vài thao tác trước."); return; }
+
+      let md = "# EVIDENCE — CredVerify MVP\n\n";
+      md += "- Contract address: `" + (contractAddress || "chưa kết nối") + "`\n";
+      md += "- Tài khoản thao tác: `" + (account || "chưa kết nối") + "`\n";
+      md += "- Xuất lúc: " + new Date().toISOString() + "\n\n";
+      md += "> Nhật ký do giao diện CredVerify ghi lại. Đối chiếu lại bằng `npx hardhat console` hoặc log của `npx hardhat node`.\n\n";
+      md += "## Nhật ký thao tác\n\n";
+      md += "| # | Thời điểm | Thao tác | Kết quả | Tx hash | Block | Gas | Ghi chú |\n";
+      md += "|---|---|---|---|---|---|---|---|\n";
+      all.forEach((e, i) => {
+        md += "| " + (i + 1) + " | " + e.at + " | " + e.op + " | " +
+          (e.ok === false ? "BỊ CHẶN" : "Thành công") + " | " +
+          (e.txHash ? "`" + e.txHash + "`" : "—") + " | " +
+          (e.block != null ? e.block : "—") + " | " +
+          (e.gas || "—") + " | " +
+          (e.reason || e.detail || "—") + " |\n";
+      });
+      md += "\n## Ghi chú bắt buộc\n\n";
+      md += "- Không đưa private key, seed phrase hay dữ liệu cá nhân thật vào tệp này.\n";
+      md += "- Bổ sung thủ công: chain ID, phiên bản compiler, deployment transaction, kết quả `npx hardhat test`.\n";
+
+      const blob = new Blob([md], { type: "text/markdown" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "EVIDENCE.md";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    /* ---------- băm tệp ---------- */
+    async function hashFile(file) {
+      const buf = await file.arrayBuffer();
+      return ethers.keccak256(new Uint8Array(buf));
+    }
+
+    function wireFileInput(inputId, outId, store) {
+      $(inputId).addEventListener("change", async (ev) => {
+        const f = ev.target.files[0];
+        if (!f) return;
+        try {
+          const h = await hashFile(f);
+          store.hash = h;
+          store.name = f.name;
+          $(outId).innerHTML = "Hash tệp <b>" + f.name + "</b>: <span class='mono'>" + short(h, 14, 12) + "</span>";
+        } catch (e) {
+          $(outId).textContent = "Không đọc được tệp: " + e.message;
+        }
+      });
+    }
+    const issueFile = { hash: null, name: null };
+    const verifyFile = { hash: null, name: null };
+
+    /* ---------- kết nối ---------- */
+    async function connect() {
+      if (!window.ethereum) {
+        banner("issueOut", "Không tìm thấy ví trong trình duyệt. Cài ví rồi tải lại trang.", true);
+        return;
+      }
+      contractAddress = ($("inpContract").value || "").trim() || localStorage.getItem(KEY_CONTRACT);
+      if (!contractAddress || !ethers.isAddress(contractAddress)) {
+        banner("issueOut", "Địa chỉ contract chưa hợp lệ. Dán địa chỉ in ra khi chạy scripts/deploy.js.", true);
+        return;
+      }
+      localStorage.setItem(KEY_CONTRACT, contractAddress);
+
+      provider = new ethers.BrowserProvider(window.ethereum);
+      await provider.send("eth_requestAccounts", []);
+      signer = await provider.getSigner();
+      account = await signer.getAddress();
+      contract = new ethers.Contract(contractAddress, ABI, signer);
+
+      const net = await provider.getNetwork();
+      $("chipNet").innerHTML = "<b>Mạng</b> " + net.name + " · chainId " + net.chainId;
+      $("chipAcct").textContent = short(account, 8, 6);
+
+      let role = "Người xác minh";
+      try {
+        const [own, iss] = await Promise.all([contract.owner(), contract.isIssuer(account)]);
+        if (own.toLowerCase() === account.toLowerCase()) role = "Chủ sở hữu";
+        else if (iss) role = "Đơn vị phát hành";
+      } catch (e) {
+        banner("issueOut", "Kết nối được ví nhưng không đọc được contract. Kiểm tra lại địa chỉ và mạng đang chọn.", true);
+        return;
+      }
+      $("chipRole").innerHTML = "<b>Vai trò</b> " + role;
+      $("setupBanner").classList.add("hidden");
+      logEntry({ op: "Kết nối ví", detail: role + " · " + short(account, 8, 6) });
+      renderList();
+    }
+
+    /* ---------- ghi nhận lỗi contract ---------- */
+    function reasonOf(err) {
+      return err?.reason || err?.shortMessage || err?.info?.error?.message || err?.message || "Không rõ nguyên nhân";
+    }
+
+    /* ---------- cấp ---------- */
+    async function doIssue() {
+      if (!contract) { banner("issueOut", "Hãy kết nối ví trước.", true); return; }
+      const raw = $("isCertId").value.trim();
+      const holder = $("isHolder").value.trim();
+      if (!raw) { banner("issueOut", "Chưa nhập mã chứng chỉ.", true); return; }
+      if (!issueFile.hash) { banner("issueOut", "Chưa chọn tệp chứng chỉ.", true); return; }
+      if (!ethers.isAddress(holder)) { banner("issueOut", "Địa chỉ ví học viên không hợp lệ.", true); return; }
+
+      const certId = toId(raw);
+      $("btnIssue").disabled = true;
+      banner("issueOut", "Đang gửi giao dịch, xác nhận trong ví…");
+      try {
+        const tx = await contract.issueCertificate(certId, issueFile.hash, holder);
+        const rc = await tx.wait();
+
+        const store = readJSON(KEY_STORE, {});
+        store[raw] = {
+          certId, hash: issueFile.hash, file: issueFile.name, holder,
+          name: $("isName").value.trim(), course: $("isCourse").value.trim(),
+          issuer: account, txHash: rc.hash
+        };
+        writeJSON(KEY_STORE, store);
+
+        logEntry({
+          op: "Cấp chứng chỉ", txHash: rc.hash, block: rc.blockNumber,
+          gas: rc.gasUsed.toString(), certId, detail: raw
+        });
+        banner("issueOut", "Đã cấp chứng chỉ <b>" + raw + "</b>. Xem mã giao dịch ở nhật ký bên phải.");
+        renderList();
+      } catch (err) {
+        const r = reasonOf(err);
+        logEntry({ op: "Cấp chứng chỉ", ok: false, certId, reason: r });
+        banner("issueOut", "Giao dịch bị chặn: " + r, true);
+      } finally {
+        $("btnIssue").disabled = false;
+      }
+    }
+
+    /* ---------- xác minh ---------- */
+    async function doVerify() {
+      if (!contract) { banner("verifyOut", "Hãy kết nối ví trước.", true); return; }
+      const raw = $("vfCertId").value.trim();
+      if (!raw) { banner("verifyOut", "Chưa nhập mã chứng chỉ.", true); return; }
+      if (!verifyFile.hash) { banner("verifyOut", "Chưa chọn tệp cần kiểm tra.", true); return; }
+
+      const certId = toId(raw);
+      try {
+        const r = await contract.verifyCertificate(certId, verifyFile.hash);
+        const valid = r[0], status = Number(r[1]), issuer = r[2], holder = r[3], issuedAt = Number(r[4]);
+
+        let cls, title, msg;
+        if (valid) {
+          cls = "valid"; title = "Chứng chỉ hợp lệ";
+          msg = "Tệp khớp với bản ghi trên chuỗi và chứng chỉ còn hiệu lực.";
+        } else if (status === 0) {
+          cls = "none"; title = "Không tìm thấy";
+          msg = "Mã chứng chỉ này chưa từng được cấp trên chuỗi.";
+        } else if (status === 2) {
+          cls = "invalid"; title = "Đã bị thu hồi";
+          msg = "Đơn vị phát hành đã thu hồi chứng chỉ này. Không còn giá trị sử dụng.";
+        } else {
+          cls = "invalid"; title = "Tệp không khớp";
+          msg = "Mã chứng chỉ tồn tại nhưng nội dung tệp đã bị thay đổi so với bản gốc đã đăng ký.";
+        }
+
+        $("verifyOut").innerHTML =
+          '<div class="verdict ' + cls + '"><h3>' + title + "</h3><p>" + msg + "</p>" +
+          "<dl>" +
+          "<dt>Trạng thái</dt><dd><span class='status-tag " + STATUS_CLASS[status] + "'>" + STATUS_LABEL[status] + "</span></dd>" +
+          "<dt>Hash bạn nộp</dt><dd>" + short(verifyFile.hash, 14, 12) + "</dd>" +
+          (status !== 0 ? "<dt>Đơn vị cấp</dt><dd>" + issuer + "</dd>" : "") +
+          (status !== 0 ? "<dt>Ví học viên</dt><dd>" + holder + "</dd>" : "") +
+          (issuedAt ? "<dt>Ngày cấp</dt><dd>" + new Date(issuedAt * 1000).toLocaleString("vi-VN") + "</dd>" : "") +
+          "</dl></div>";
+
+        logEntry({
+          op: "Xác minh", certId,
+          detail: title + " (đọc trạng thái, không phát sinh giao dịch)"
+        });
+      } catch (err) {
+        banner("verifyOut", "Không đọc được dữ liệu: " + reasonOf(err), true);
+      }
+    }
+
+    /* ---------- danh sách & thu hồi ---------- */
+    async function renderList() {
+      const store = readJSON(KEY_STORE, {});
+      const keys = Object.keys(store);
+      if (!keys.length) {
+        $("listOut").innerHTML = '<p class="empty">Chưa có chứng chỉ nào được cấp từ trình duyệt này.</p>';
+        return;
+      }
+      let rows = "";
+      for (const raw of keys) {
+        const c = store[raw];
+        let status = "—", tag = "t-none";
+        if (contract) {
+          try {
+            const rec = await contract.certificates(c.certId);
+            const s = Number(rec[3]);
+            status = STATUS_LABEL[s]; tag = STATUS_CLASS[s];
+          } catch { }
+        }
+        rows +=
+          "<tr><td><b>" + raw + "</b><br><span class='mono' style='font-size:11.5px;color:var(--ink-soft)'>" +
+          short(c.certId, 10, 8) + "</span></td>" +
+          "<td>" + (c.name || "—") + "<br><span style='font-size:12px;color:var(--ink-soft)'>" + (c.course || "—") + "</span></td>" +
+          "<td><span class='status-tag " + tag + "'>" + status + "</span></td>" +
+          "<td><button class='small ghost' data-revoke='" + raw + "'>Thu hồi</button></td></tr>";
+      }
+      $("listOut").innerHTML =
+        "<table><thead><tr><th>Mã chứng chỉ</th><th>Học viên (off-chain)</th><th>Trạng thái</th><th></th></tr></thead><tbody>" +
+        rows + "</tbody></table>";
+
+      document.querySelectorAll("[data-revoke]").forEach((b) => {
+        b.addEventListener("click", () => doRevoke(b.getAttribute("data-revoke")));
+      });
+    }
+
+    async function doRevoke(raw) {
+      if (!contract) return;
+      const certId = toId(raw);
+      if (!confirm("Thu hồi chứng chỉ " + raw + "? Thao tác này không thể hoàn tác.")) return;
+      try {
+        const tx = await contract.revokeCertificate(certId);
+        const rc = await tx.wait();
+        logEntry({
+          op: "Thu hồi chứng chỉ", txHash: rc.hash, block: rc.blockNumber,
+          gas: rc.gasUsed.toString(), certId, detail: raw
+        });
+        renderList();
+      } catch (err) {
+        const r = reasonOf(err);
+        logEntry({ op: "Thu hồi chứng chỉ", ok: false, certId, reason: r });
+        alert("Thu hồi bị chặn: " + r);
+      }
+    }
+
+    /* ---------- quản trị ---------- */
+    async function adminAction(kind) {
+      if (!contract) { banner("adminOut", "Hãy kết nối ví trước.", true); return; }
+      const addr = $("adAddr").value.trim();
+      if (!ethers.isAddress(addr)) { banner("adminOut", "Địa chỉ ví không hợp lệ.", true); return; }
+
+      if (kind === "check") {
+        try {
+          const ok = await contract.isIssuer(addr);
+          banner("adminOut", "Địa chỉ này " + (ok ? "<b>có</b>" : "<b>không có</b>") + " quyền phát hành.");
+          logEntry({ op: "Kiểm tra quyền issuer", detail: short(addr, 8, 6) + " → " + (ok ? "có quyền" : "không có quyền") });
+        } catch (err) { banner("adminOut", reasonOf(err), true); }
+        return;
+      }
+
+      const label = kind === "add" ? "Cấp quyền phát hành" : "Thu quyền phát hành";
+      try {
+        const tx = kind === "add" ? await contract.addIssuer(addr) : await contract.removeIssuer(addr);
+        const rc = await tx.wait();
+        logEntry({
+          op: label, txHash: rc.hash, block: rc.blockNumber,
+          gas: rc.gasUsed.toString(), detail: short(addr, 8, 6)
+        });
+        banner("adminOut", label + " thành công cho " + short(addr, 8, 6) + ".");
+      } catch (err) {
+        const r = reasonOf(err);
+        logEntry({ op: label, ok: false, reason: r, detail: short(addr, 8, 6) });
+        banner("adminOut", "Bị chặn: " + r, true);
+      }
+    }
+
+    /* ---------- khởi động ---------- */
+    document.querySelectorAll("nav button").forEach((b) => {
+      b.addEventListener("click", () => {
+        document.querySelectorAll("nav button").forEach((x) => x.classList.remove("on"));
+        b.classList.add("on");
+        ["issue", "verify", "manage", "admin"].forEach((t) => {
+          $("tab-" + t).classList.toggle("hidden", t !== b.dataset.tab);
+        });
+        if (b.dataset.tab === "manage") renderList();
+      });
+    });
+
+    $("btnConnect").addEventListener("click", connect);
+    $("btnSaveContract").addEventListener("click", () => {
+      const v = $("inpContract").value.trim();
+      if (!ethers.isAddress(v)) { alert("Địa chỉ không hợp lệ."); return; }
+      localStorage.setItem(KEY_CONTRACT, v);
+      alert("Đã lưu. Bấm Kết nối ví để tiếp tục.");
+    });
+    $("btnIssue").addEventListener("click", doIssue);
+    $("btnVerify").addEventListener("click", doVerify);
+    $("btnRefresh").addEventListener("click", renderList);
+    $("btnExport").addEventListener("click", exportEvidence);
+    $("btnClearLedger").addEventListener("click", () => {
+      if (confirm("Xóa toàn bộ nhật ký bằng chứng?")) { writeJSON(KEY_LEDGER, []); renderLedger(); }
+    });
+    $("btnAddIssuer").addEventListener("click", () => adminAction("add"));
+    $("btnRemoveIssuer").addEventListener("click", () => adminAction("remove"));
+    $("btnCheckIssuer").addEventListener("click", () => adminAction("check"));
+
+    wireFileInput("isFile", "isHashOut", issueFile);
+    wireFileInput("vfFile", "vfHashOut", verifyFile);
+
+    const saved = localStorage.getItem(KEY_CONTRACT);
+    if (saved) $("inpContract").value = saved;
+    renderLedger();
+    renderList();
+
+    if (window.ethereum) {
+      window.ethereum.on("accountsChanged", () => location.reload());
+      window.ethereum.on("chainChanged", () => location.reload());
+    }
+  </script>
+</body>
+
+</html>
