@@ -74,7 +74,8 @@ async function main() {
   // ---------- Bước 3: cấp chứng chỉ (happy path) ----------
   const rawId = "KHOAHOC-2026-0001";
   const certId = hre.ethers.keccak256(hre.ethers.toUtf8Bytes(rawId));
-  const certHash = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("noi-dung-tep-chung-chi-goc"));
+  const pdfData = fs.readFileSync("Demo/Microsoft Office Specialist  Associate.pdf")
+  const certHash = hre.ethers.keccak256(pdfData);
 
   rc = await (
     await registry.connect(trainingCenter).issueCertificate(certId, certHash, student.address)
@@ -214,7 +215,7 @@ async function main() {
   md += "\n";
 
   md += "## 8. Đối chiếu thao tác giao diện với giao dịch trên chuỗi\n\n";
-  md += "| Thao tác trên giao diện `app/index.html` | Hàm contract | Thay đổi trạng thái |\n|---|---|---|\n";
+  md += "| Thao tác trên giao diện `index.html` | Hàm contract | Thay đổi trạng thái |\n|---|---|---|\n";
   md += "| Quản trị đơn vị phát hành → Cấp quyền phát hành | `addIssuer(address)` | `isIssuer[addr]` = true, event `IssuerAdded` |\n";
   md += "| Cấp chứng chỉ → nút Cấp chứng chỉ | `issueCertificate(bytes32,bytes32,address)` | `certificates[certId].status` None → Issued, event `CertificateIssued` |\n";
   md += "| Xác minh → nút Xác minh | `verifyCertificate(bytes32,bytes32)` | Chỉ đọc, không phát sinh giao dịch |\n";
