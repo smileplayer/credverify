@@ -607,7 +607,7 @@
         <div id="adminOut"></div>
 
         <p class="note">Thu quyền chỉ chặn việc cấp chứng chỉ mới. Đơn vị vẫn thu hồi được các chứng chỉ họ đã cấp trước
-          đó — đây là lựa chọn thiết kế, cần nêu rõ trong báo cáo.</p>
+          đó.</p>
       </section>
     </div>
 
@@ -623,7 +623,7 @@
             gas.</p>
         </div>
         <div class="ledger-foot">
-          <button class="small" id="btnExport">Xuất EVIDENCE.md</button>
+          <button class="small" id="btnExport">Xuất nhật ký</button>
           <button class="small ghost" id="btnClearLedger">Xóa nhật ký</button>
         </div>
       </div>
@@ -729,7 +729,7 @@
           (e.gas || "—") + " | " +
           (e.reason || e.detail || "—") + " |\n";
       });
-      md += "\n## Ghi chú bắt buộc\n\n";
+      md += "\n## Ghi chú\n\n";
       md += "- Không đưa private key, seed phrase hay dữ liệu cá nhân thật vào tệp này.\n";
       md += "- Bổ sung thủ công: chain ID, phiên bản compiler, deployment transaction, kết quả `npx hardhat test`.\n";
 

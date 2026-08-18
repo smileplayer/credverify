@@ -245,6 +245,51 @@ describe("CredentialRegistry", function () {
     expect(issuedAt).to.be.greaterThan(0);
   });
 
+  // ---------- QUYẾT ĐỊNH THIẾT KẾ CÓ CHỦ ĐÍCH ----------
+  // Hai test dưới đây ghim lại một hành vi dễ bị hiểu nhầm là lỗ hổng.
+  // Hàm revokeCertificate() cố ý KHÔNG dùng modifier onlyIssuer; nó chỉ kiểm
+  // cert.issuer == msg.sender. Xem lập luận đầy đủ ở Mục 8 báo cáo cuối kỳ.
+
+  it("THIẾT KẾ CÓ CHỦ ĐÍCH: issuer đã bị gỡ quyền VẪN thu hồi được chứng chỉ do chính mình đã cấp", async function () {
+    // Trung tâm đào tạo cấp chứng chỉ trong lúc còn quyền phát hành.
+    await registry.connect(trainingCenter).issueCertificate(certId, certHash, student.address);
+
+    // Sau đó owner gỡ quyền phát hành (vd: trung tâm chấm dứt hợp tác, rời hệ thống).
+    await registry.connect(owner).removeIssuer(trainingCenter.address);
+    expect(await registry.isIssuer(trainingCenter.address)).to.equal(false);
+
+    // Từ đây trung tâm KHÔNG cấp mới được nữa.
+    const newCertId = ethers.keccak256(ethers.toUtf8Bytes("KHOAHOC-2026-0003"));
+    await expect(
+      registry.connect(trainingCenter).issueCertificate(newCertId, certHash, student.address)
+    ).to.be.revertedWith("CredentialRegistry: caller is not an authorized issuer");
+
+    // NHƯNG vẫn thu hồi được chứng chỉ CŨ của chính mình.
+    // Lý do: một đơn vị đã rời hệ thống vẫn phải chịu trách nhiệm sửa sai sót của
+    // chính mình. Nếu chặn, mọi chứng chỉ cấp nhầm trước đó sẽ vĩnh viễn không thu
+    // hồi được — mâu thuẫn với chính mục đích tồn tại của cơ chế thu hồi.
+    await expect(registry.connect(trainingCenter).revokeCertificate(certId))
+      .to.emit(registry, "CertificateRevoked");
+
+    const [valid, status] = await registry.verifyCertificate(certId, certHash);
+    expect(valid).to.equal(false);
+    expect(status).to.equal(2); // Status.Revoked
+  });
+
+  it("GIỚI HẠN RỦI RO TỒN DƯ: issuer bị gỡ quyền KHÔNG thu hồi được chứng chỉ của issuer khác", async function () {
+    // Quyền thu hồi còn lại sau khi bị gỡ chỉ giới hạn trong phạm vi các chứng chỉ
+    // do chính địa chỉ đó đã cấp; nó không lan sang chứng chỉ của issuer khác.
+    // Đây là ranh giới làm cho quyết định thiết kế ở test trên chấp nhận được.
+    await registry.connect(owner).addIssuer(otherIssuer.address);
+    await registry.connect(otherIssuer).issueCertificate(certId, certHash, student.address);
+
+    await registry.connect(owner).removeIssuer(trainingCenter.address);
+
+    await expect(
+      registry.connect(trainingCenter).revokeCertificate(certId)
+    ).to.be.revertedWith("CredentialRegistry: only the issuing address can revoke");
+  });
+
   it("hai certId khác nhau có thể tạo hai certificate độc lập", async function () {
     const certId2 = ethers.keccak256(
       ethers.toUtf8Bytes("KHOAHOC-2026-0002")
