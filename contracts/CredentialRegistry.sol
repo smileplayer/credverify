@@ -6,13 +6,13 @@ pragma solidity ^0.8.24;
 ///         Đây là thành phần "on-chain" của MVP CredVerify.
 ///
 /// Thiết kế theo state machine đã mô tả trong proposal:
-///   None -> Issued -> Revoked   (chỉ đi một chiều, không có đường quay lại)
+///   None -> Issued -> Revoked 
 ///
 /// Vai trò (roles):
-///   - owner   : quản trị hệ thống, có quyền thêm/xóa issuer (vd: admin của trung tâm đào tạo)
-///   - issuer  : địa chỉ được ủy quyền cấp chứng chỉ (vd: ví của trung tâm đào tạo)
-///   - holder  : học viên nhận chứng chỉ (chỉ lưu địa chỉ, không lưu thông tin cá nhân)
-///   - verifier: bất kỳ ai gọi hàm verifyCertificate (không cần địa chỉ đặc biệt, chỉ đọc dữ liệu công khai)
+///   - owner   : quản trị hệ thống, có quyền thêm/xóa issuer
+///   - issuer  : địa chỉ được ủy quyền cấp chứng chỉ
+///   - holder  : học viên nhận chứng chỉ
+///   - verifier: bất kỳ ai gọi hàm verifyCertificate
 contract CredentialRegistry {
     // ---------- Kiểu dữ liệu ----------
 
@@ -23,9 +23,9 @@ contract CredentialRegistry {
     }
 
     struct Certificate {
-        bytes32 certHash;   // hash (vd: keccak256) của nội dung file chứng chỉ gốc, dùng để đối chiếu khi verify
-        address issuer;     // địa chỉ issuer đã cấp - chỉ địa chỉ này mới được thu hồi
-        address holder;     // địa chỉ ví của học viên (không phải danh tính thật)
+        bytes32 certHash;   // hash của nội dung file chứng chỉ gốc
+        address issuer;     // địa chỉ issuer đã cấp
+        address holder;     // địa chỉ ví của học viên
         Status status;      // trạng thái hiện tại
         uint256 issuedAt;   // timestamp lúc cấp
     }
@@ -35,7 +35,7 @@ contract CredentialRegistry {
     address public owner;
     mapping(address => bool) public isIssuer;
 
-    // certId là mã định danh duy nhất của mỗi chứng chỉ (vd: keccak256("KHOAHOC-2026-0001"))
+    // certId là mã định danh duy nhất của mỗi chứng chỉ
 
     mapping(bytes32 => Certificate) public certificates;
 
@@ -43,10 +43,11 @@ contract CredentialRegistry {
 
     event IssuerAdded(address indexed issuerAddress);
     event IssuerRemoved(address indexed issuerAddress);
+
     event CertificateIssued(
         bytes32 indexed certId,
-        bytes32 certHash,
-        address indexed issuer,
+        bytes32 indexed certHash,
+        address issuer,
         address indexed holder,
         uint256 issuedAt
     );
@@ -115,7 +116,7 @@ contract CredentialRegistry {
     }
 
     /// @notice Xác minh một chứng chỉ: đối chiếu hash được cung cấp với hash đã lưu on-chain,
-    ///         đồng thời trả về trạng thái hiện tại. Đây là hàm read-only, ai cũng gọi được (verifier).
+    ///         đồng thời trả về trạng thái hiện tại.
     /// @return valid true nếu certId tồn tại, hash khớp và trạng thái vẫn là Issued
     function verifyCertificate(bytes32 certId, bytes32 providedHash)
         external

@@ -515,6 +515,7 @@
       <nav>
         <button class="on" data-tab="issue">Cấp chứng chỉ</button>
         <button data-tab="verify">Xác minh</button>
+        <button data-tab="mine">Chứng chỉ của tôi</button>
         <button data-tab="manage">Tra cứu &amp; thu hồi</button>
         <button data-tab="admin">Quản trị đơn vị phát hành</button>
       </nav>
@@ -565,21 +566,36 @@
       <!-- ===== XÁC MINH ===== -->
       <section class="panel hidden" id="tab-verify">
         <h2>Xác minh chứng chỉ</h2>
-        <p class="lede">Dành cho nhà tuyển dụng. Nhập mã chứng chỉ và chọn tệp ứng viên nộp — hệ thống đối chiếu hash và
-          trạng thái trên chuỗi.</p>
+        <p class="lede">Dành cho nhà tuyển dụng. Chỉ cần chọn tệp ứng viên nộp — hệ thống tự tra bản ghi tương ứng trên
+          chuỗi rồi đối chiếu hash và trạng thái.</p>
 
-        <div class="field">
-          <label for="vfCertId">Mã chứng chỉ</label>
-          <input type="text" id="vfCertId" placeholder="KHOAHOC-2026-0001">
-        </div>
         <div class="field">
           <label for="vfFile">Tệp cần kiểm tra</label>
           <input type="file" id="vfFile">
           <p class="hint" id="vfHashOut">Chưa chọn tệp.</p>
         </div>
+        <div class="field">
+          <label for="vfCertId">Mã chứng chỉ <span style="text-transform:none;letter-spacing:0">(không bắt
+              buộc)</span></label>
+          <input type="text" id="vfCertId" placeholder="Để trống nếu chỉ có tệp">
+          <p class="hint">Nhập mã nếu tờ chứng chỉ có in mã. Để trống thì hệ thống tra ngược từ hash của tệp.</p>
+        </div>
 
         <button id="btnVerify">Xác minh</button>
         <div id="verifyOut"></div>
+      </section>
+
+      <!-- ===== CHỨNG CHỈ CỦA TÔI ===== -->
+      <section class="panel hidden" id="tab-mine">
+        <h2>Chứng chỉ của tôi</h2>
+        <p class="lede">Dành cho học viên. Danh sách dựng từ event <span class="mono">CertificateIssued</span> trên
+          chuỗi, lọc theo ví đang kết nối.</p>
+
+        <div id="mineOut"></div>
+        <button class="ghost small" id="btnRefreshMine" style="margin-top:16px">Tải lại từ chuỗi</button>
+
+        <p class="note">Chỉ đọc dữ liệu công khai trên chuỗi, không phát sinh giao dịch và không tốn gas. Cột chứng chỉ
+          hiển thị mã gốc nếu chính trình duyệt này đã cấp; nếu không, chỉ có certId.</p>
       </section>
 
       <!-- ===== TRA CỨU & THU HỒI ===== -->
@@ -640,7 +656,7 @@
       "function revokeCertificate(bytes32 certId)",
       "function verifyCertificate(bytes32 certId, bytes32 providedHash) view returns (bool valid, uint8 status, address issuer, address holder, uint256 issuedAt)",
       "function certificates(bytes32) view returns (bytes32 certHash, address issuer, address holder, uint8 status, uint256 issuedAt)",
-      "event CertificateIssued(bytes32 indexed certId, bytes32 certHash, address indexed issuer, address indexed holder, uint256 issuedAt)",
+      "event CertificateIssued(bytes32 indexed certId, bytes32 indexed certHash, address issuer, address indexed holder, uint256 issuedAt)",
       "event CertificateRevoked(bytes32 indexed certId, address indexed issuer, uint256 revokedAt)"
     ];
 
@@ -800,6 +816,7 @@
       $("setupBanner").classList.add("hidden");
       logEntry({ op: "Kết nối ví", detail: role + " · " + short(account, 8, 6) });
       renderList();
+      renderMine(false);
     }
 
     /* ---------- ghi nhận lỗi contract ---------- */
@@ -847,13 +864,52 @@
     }
 
     /* ---------- xác minh ---------- */
+
+    async function findCertIdByHash(fileHash) {
+      const filter = contract.filters.CertificateIssued(null, fileHash, null, null);
+      const logs = await contract.queryFilter(filter, 0, "latest");
+      if (!logs.length) return null;
+      // Về lý thuyết một tệp giống hệt nhau có thể được cấp nhiều lần với certId khác nhau.
+      // Ưu tiên bản ghi còn hiệu lực; nếu không có thì lấy bản mới nhất.
+      for (const lg of logs) {
+        try {
+          if (Number((await contract.certificates(lg.args.certId))[3]) === 1) return lg.args.certId;
+        } catch { }
+      }
+      return logs[logs.length - 1].args.certId;
+    }
+
     async function doVerify() {
       if (!contract) { banner("verifyOut", "Hãy kết nối ví trước.", true); return; }
       const raw = $("vfCertId").value.trim();
-      if (!raw) { banner("verifyOut", "Chưa nhập mã chứng chỉ.", true); return; }
       if (!verifyFile.hash) { banner("verifyOut", "Chưa chọn tệp cần kiểm tra.", true); return; }
 
-      const certId = toId(raw);
+      let certId;
+      if (raw) {
+        certId = toId(raw);
+      } else {
+        // Không nhập mã: tra ngược từ chính tệp được nộp.
+        banner("verifyOut", "Không có mã chứng chỉ — đang tra cứu bằng tệp…");
+        try {
+          certId = await findCertIdByHash(verifyFile.hash);
+        } catch (err) {
+          banner("verifyOut", "Không tra cứu được trên chuỗi: " + reasonOf(err), true);
+          return;
+        }
+        if (!certId) {
+          $("verifyOut").innerHTML =
+            '<div class="verdict none"><h3>Không tìm thấy</h3>' +
+            "<p>Không có chứng chỉ nào trên chuỗi khớp với tệp này. Tệp có thể chưa từng được đăng ký, " +
+            "hoặc nội dung đã bị chỉnh sửa so với bản gốc.</p><dl>" +
+            "<dt>Hash bạn nộp</dt><dd>" + short(verifyFile.hash, 14, 12) + "</dd></dl></div>";
+          logEntry({
+            op: "Xác minh bằng tệp",
+            detail: "Không tìm thấy bản ghi khớp (đọc event, không phát sinh giao dịch)"
+          });
+          return;
+        }
+      }
+
       try {
         const r = await contract.verifyCertificate(certId, verifyFile.hash);
         const valid = r[0], status = Number(r[1]), issuer = r[2], holder = r[3], issuedAt = Number(r[4]);
@@ -878,17 +934,80 @@
           "<dl>" +
           "<dt>Trạng thái</dt><dd><span class='status-tag " + STATUS_CLASS[status] + "'>" + STATUS_LABEL[status] + "</span></dd>" +
           "<dt>Hash bạn nộp</dt><dd>" + short(verifyFile.hash, 14, 12) + "</dd>" +
+          (raw ? "" : "<dt>certId tra được</dt><dd>" + short(certId, 14, 12) + "</dd>") +
           (status !== 0 ? "<dt>Đơn vị cấp</dt><dd>" + issuer + "</dd>" : "") +
           (status !== 0 ? "<dt>Ví học viên</dt><dd>" + holder + "</dd>" : "") +
           (issuedAt ? "<dt>Ngày cấp</dt><dd>" + new Date(issuedAt * 1000).toLocaleString("vi-VN") + "</dd>" : "") +
           "</dl></div>";
 
         logEntry({
-          op: "Xác minh", certId,
+          op: raw ? "Xác minh bằng mã và tệp" : "Xác minh chỉ bằng tệp",
+          certId,
           detail: title + " (đọc trạng thái, không phát sinh giao dịch)"
         });
       } catch (err) {
         banner("verifyOut", "Không đọc được dữ liệu: " + reasonOf(err), true);
+      }
+    }
+
+    /* ---------- chứng chỉ của tôi ---------- */
+
+    async function renderMine(writeLog) {
+      if (!contract) {
+        $("mineOut").innerHTML = '<p class="empty">Hãy kết nối ví để xem chứng chỉ của bạn.</p>';
+        return;
+      }
+      $("mineOut").innerHTML = '<p class="empty">Đang đọc dữ liệu từ chuỗi…</p>';
+      try {
+        const filter = contract.filters.CertificateIssued(null, null, null, account);
+        // Quét từ block 0: chấp nhận được với mạng local. Trên mạng công khai cần
+        // giới hạn khoảng block hoặc dùng dịch vụ lập chỉ mục riêng.
+        const logs = (await contract.queryFilter(filter, 0, "latest"))
+          .filter((l) => (l.args.holder || "").toLowerCase() === account.toLowerCase());
+
+        if (!logs.length) {
+          $("mineOut").innerHTML = '<p class="empty">Ví này chưa được cấp chứng chỉ nào.</p>';
+          return;
+        }
+
+        // Mã gốc và tên khóa học chỉ có nếu chính trình duyệt này đã cấp chứng chỉ đó.
+        const store = readJSON(KEY_STORE, {});
+        const meta = {};
+        Object.keys(store).forEach((raw) => {
+          const c = store[raw];
+          if (c && c.certId) meta[c.certId.toLowerCase()] = { raw: raw, course: c.course };
+        });
+
+        let rows = "";
+        for (const lg of logs) {
+          const certId = lg.args.certId;
+          const issuedAt = Number(lg.args.issuedAt);
+          const m = meta[certId.toLowerCase()];
+          let s = 0;
+          try {
+            s = Number((await contract.certificates(certId))[3]);
+          } catch { }
+          rows +=
+            "<tr><td>" + (m ? "<b>" + m.raw + "</b><br>" : "") +
+            "<span class='mono' style='font-size:11.5px;color:var(--ink-soft)'>" + short(certId, 10, 8) + "</span></td>" +
+            "<td>" + (m && m.course ? m.course + "<br>" : "") +
+            "<span class='mono' style='font-size:11.5px;color:var(--ink-soft)'>" + short(lg.args.issuer, 8, 6) + "</span></td>" +
+            "<td>" + (issuedAt ? new Date(issuedAt * 1000).toLocaleDateString("vi-VN") : "—") + "</td>" +
+            "<td><span class='status-tag " + STATUS_CLASS[s] + "'>" + STATUS_LABEL[s] + "</span></td></tr>";
+        }
+
+        $("mineOut").innerHTML =
+          "<table><thead><tr><th>Chứng chỉ</th><th>Đơn vị cấp</th><th>Ngày cấp</th><th>Trạng thái</th></tr></thead><tbody>" +
+          rows + "</tbody></table>";
+
+        if (writeLog) {
+          logEntry({
+            op: "Xem chứng chỉ của tôi",
+            detail: logs.length + " chứng chỉ, đọc từ event trên chuỗi (không phát sinh giao dịch)"
+          });
+        }
+      } catch (err) {
+        banner("mineOut", "Không đọc được dữ liệu từ chuỗi: " + reasonOf(err), true);
       }
     }
 
@@ -982,10 +1101,11 @@
       b.addEventListener("click", () => {
         document.querySelectorAll("nav button").forEach((x) => x.classList.remove("on"));
         b.classList.add("on");
-        ["issue", "verify", "manage", "admin"].forEach((t) => {
+        ["issue", "verify", "mine", "manage", "admin"].forEach((t) => {
           $("tab-" + t).classList.toggle("hidden", t !== b.dataset.tab);
         });
         if (b.dataset.tab === "manage") renderList();
+        if (b.dataset.tab === "mine") renderMine(true);
       });
     });
 
@@ -999,6 +1119,7 @@
     $("btnIssue").addEventListener("click", doIssue);
     $("btnVerify").addEventListener("click", doVerify);
     $("btnRefresh").addEventListener("click", renderList);
+    $("btnRefreshMine").addEventListener("click", () => renderMine(true));
     $("btnExport").addEventListener("click", exportEvidence);
     $("btnClearLedger").addEventListener("click", () => {
       if (confirm("Xóa toàn bộ nhật ký bằng chứng?")) { writeJSON(KEY_LEDGER, []); renderLedger(); }
@@ -1014,6 +1135,7 @@
     if (saved) $("inpContract").value = saved;
     renderLedger();
     renderList();
+    renderMine(false);
 
     if (window.ethereum) {
       window.ethereum.on("accountsChanged", () => location.reload());

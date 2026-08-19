@@ -58,7 +58,7 @@ describe("CredentialRegistry", function () {
     expect(status).to.equal(2); // Status.Revoked
   });
 
-  // ---------- NEGATIVE / ADVERSARIAL TESTS (M7 - hành vi bị chặn) ----------
+  // ---------- NEGATIVE / ADVERSARIAL TESTS  ----------
 
   it("BỊ CHẶN: địa chỉ không phải issuer cố cấp chứng chỉ => revert", async function () {
     await expect(
@@ -246,28 +246,18 @@ describe("CredentialRegistry", function () {
   });
 
   // ---------- QUYẾT ĐỊNH THIẾT KẾ CÓ CHỦ ĐÍCH ----------
-  // Hai test dưới đây ghim lại một hành vi dễ bị hiểu nhầm là lỗ hổng.
-  // Hàm revokeCertificate() cố ý KHÔNG dùng modifier onlyIssuer; nó chỉ kiểm
-  // cert.issuer == msg.sender. Xem lập luận đầy đủ ở Mục 8 báo cáo cuối kỳ.
 
   it("THIẾT KẾ CÓ CHỦ ĐÍCH: issuer đã bị gỡ quyền VẪN thu hồi được chứng chỉ do chính mình đã cấp", async function () {
-    // Trung tâm đào tạo cấp chứng chỉ trong lúc còn quyền phát hành.
     await registry.connect(trainingCenter).issueCertificate(certId, certHash, student.address);
 
-    // Sau đó owner gỡ quyền phát hành (vd: trung tâm chấm dứt hợp tác, rời hệ thống).
     await registry.connect(owner).removeIssuer(trainingCenter.address);
     expect(await registry.isIssuer(trainingCenter.address)).to.equal(false);
 
-    // Từ đây trung tâm KHÔNG cấp mới được nữa.
     const newCertId = ethers.keccak256(ethers.toUtf8Bytes("KHOAHOC-2026-0003"));
     await expect(
       registry.connect(trainingCenter).issueCertificate(newCertId, certHash, student.address)
     ).to.be.revertedWith("CredentialRegistry: caller is not an authorized issuer");
 
-    // NHƯNG vẫn thu hồi được chứng chỉ CŨ của chính mình.
-    // Lý do: một đơn vị đã rời hệ thống vẫn phải chịu trách nhiệm sửa sai sót của
-    // chính mình. Nếu chặn, mọi chứng chỉ cấp nhầm trước đó sẽ vĩnh viễn không thu
-    // hồi được — mâu thuẫn với chính mục đích tồn tại của cơ chế thu hồi.
     await expect(registry.connect(trainingCenter).revokeCertificate(certId))
       .to.emit(registry, "CertificateRevoked");
 
@@ -277,9 +267,6 @@ describe("CredentialRegistry", function () {
   });
 
   it("GIỚI HẠN RỦI RO TỒN DƯ: issuer bị gỡ quyền KHÔNG thu hồi được chứng chỉ của issuer khác", async function () {
-    // Quyền thu hồi còn lại sau khi bị gỡ chỉ giới hạn trong phạm vi các chứng chỉ
-    // do chính địa chỉ đó đã cấp; nó không lan sang chứng chỉ của issuer khác.
-    // Đây là ranh giới làm cho quyết định thiết kế ở test trên chấp nhận được.
     await registry.connect(owner).addIssuer(otherIssuer.address);
     await registry.connect(otherIssuer).issueCertificate(certId, certHash, student.address);
 
@@ -322,5 +309,80 @@ describe("CredentialRegistry", function () {
 
     expect(valid2).to.equal(true);
     expect(status2).to.equal(1); // Status.Issued
+  });
+
+  // ---------- TRUY VẤN QUA EVENT  ----------
+  it("Học viên truy vấn được đúng danh sách chứng chỉ của chính mình qua event", async function () {
+    const certId2 = ethers.keccak256(ethers.toUtf8Bytes("KHOAHOC-2026-0002"));
+    const certHash2 = ethers.keccak256(ethers.toUtf8Bytes("noi-dung-file-pdf-2"));
+
+    await registry.connect(trainingCenter).issueCertificate(certId, certHash, student.address);
+    await registry.connect(trainingCenter).issueCertificate(certId2, certHash2, student.address);
+
+    const logs = await registry.queryFilter(
+      registry.filters.CertificateIssued(null, null, null, student.address),
+      0,
+      "latest"
+    );
+
+    expect(logs.length).to.equal(2);
+    const ids = logs.map((l) => l.args.certId);
+    expect(ids).to.include(certId);
+    expect(ids).to.include(certId2);
+    logs.forEach((l) => expect(l.args.holder).to.equal(student.address));
+  });
+
+  it("Danh sách của học viên không lẫn chứng chỉ của ví khác", async function () {
+    const certIdKhac = ethers.keccak256(ethers.toUtf8Bytes("KHOAHOC-2026-0009"));
+
+    await registry.connect(trainingCenter).issueCertificate(certId, certHash, student.address);
+    await registry.connect(trainingCenter).issueCertificate(certIdKhac, certHash, attacker.address);
+
+    const cuaHocVien = await registry.queryFilter(
+      registry.filters.CertificateIssued(null, null, null, student.address), 0, "latest");
+    const cuaViKhac = await registry.queryFilter(
+      registry.filters.CertificateIssued(null, null, null, otherIssuer.address), 0, "latest");
+
+    expect(cuaHocVien.length).to.equal(1);
+    expect(cuaHocVien[0].args.certId).to.equal(certId);
+    expect(cuaViKhac.length).to.equal(0); // ví chưa từng được cấp gì
+  });
+
+  it("Xác minh không cần mã: tra ngược được certId từ hash của tệp", async function () {
+    await registry.connect(trainingCenter).issueCertificate(certId, certHash, student.address);
+
+    // Đây là việc findCertIdByHash() làm ở giao diện khi người dùng bỏ trống ô mã.
+    const logs = await registry.queryFilter(
+      registry.filters.CertificateIssued(null, certHash, null, null), 0, "latest");
+
+    expect(logs.length).to.equal(1);
+    expect(logs[0].args.certId).to.equal(certId);
+
+    // Có certId rồi thì xác minh như bình thường.
+    const [valid, status] = await registry.verifyCertificate(logs[0].args.certId, certHash);
+    expect(valid).to.equal(true);
+    expect(status).to.equal(1);
+  });
+
+  it("Xác minh không cần mã: tệp chưa từng đăng ký thì không tra ra bản ghi nào", async function () {
+    await registry.connect(trainingCenter).issueCertificate(certId, certHash, student.address);
+
+    const hashLa = ethers.keccak256(ethers.toUtf8Bytes("tep-chua-tung-duoc-cap"));
+    const logs = await registry.queryFilter(
+      registry.filters.CertificateIssued(null, hashLa, null, null), 0, "latest");
+
+    expect(logs.length).to.equal(0);
+  });
+
+  it("issuer tuy không còn indexed nhưng vẫn đọc được đầy đủ từ dữ liệu event", async function () {
+    // Bỏ indexed của issuer chỉ mất khả năng để node lọc, KHÔNG mất dữ liệu.
+    await registry.connect(trainingCenter).issueCertificate(certId, certHash, student.address);
+
+    const logs = await registry.queryFilter(registry.filters.CertificateIssued(), 0, "latest");
+
+    expect(logs.length).to.equal(1);
+    expect(logs[0].args.issuer).to.equal(trainingCenter.address);
+    expect(logs[0].args.certHash).to.equal(certHash);
+    expect(Number(logs[0].args.issuedAt)).to.be.greaterThan(0);
   });
 });
