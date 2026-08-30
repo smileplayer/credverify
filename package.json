@@ -1,7 +1,7 @@
 {
   "name": "credverify",
-  "version": "1.0.0",
-  "description": "",
+  "version":"2.0.0",
+  "description": "Hệ thống cấp, xác minh và thu hồi chứng chỉ khóa học trên blockchain (MVP)",
   "main": "index.js",
   "scripts": {
     "compile": "hardhat compile",
@@ -9,14 +9,21 @@
     "node": "hardhat node",
     "clean": "hardhat clean",
     "deploy": "hardhat run scripts/deploy.js",
-    "deploy:local": "hardhat run scripts/deploy.js --network localhost"
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "evidence": "hardhat run scripts/collect-evidence.js --network localhost",
+    "coverage": "hardhat coverage",
+    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
+    "seed:sepolia": "hardhat run scripts/seed-sepolia.js --network sepolia",
+    "verify:sepolia": "hardhat verify --network sepolia",
+    "slither": "slither . --filter-paths \"contracts/attack\" --exclude-dependencies"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Tạ Minh Đức",
+  "license": "MIT",
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
     "hardhat": "^2.29.0",
-    "solc": "^0.8.24"
+    "solc": "^0.8.24",
+    "dotenv": "^16.4.5"
   }
 }
