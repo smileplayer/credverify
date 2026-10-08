@@ -1,0 +1,510 @@
+/* CredVerify V3 — kiểu dáng giao diện. */
+:root {
+  --ink: #16202B;
+  --ink-soft: #5A6975;
+  --ground: #E9EDF0;
+  --surface: #FFFFFF;
+  --rule: #C7D0D7;
+  --rule-soft: #E1E7EB;
+  --seal: #A32B2B;
+  --valid: #1B6B58;
+  --pending: #8A6A1F;
+  --radius: 2px;
+}
+
+* {
+  box-sizing: border-box
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0
+}
+
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono {
+  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace
+}
+
+/* ---------- Masthead ---------- */
+header {
+  border-bottom: 2px solid var(--ink);
+  background: var(--surface);
+}
+
+.masthead {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 22px 24px 16px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.brand h1 {
+  font-family: 'IBM Plex Serif', Cambria, 'Noto Serif', 'Times New Roman', serif;
+  font-weight: 600;
+  font-size: 27px;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.brand p {
+  margin: 2px 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+
+.conn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap
+}
+
+.chip {
+  border: 1px solid var(--rule);
+  padding: 5px 9px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  background: var(--surface);
+}
+
+.chip b {
+  font-weight: 500;
+  color: var(--ink-soft);
+  font-weight: 400
+}
+
+/* ---------- Buttons ---------- */
+button {
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: var(--radius);
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: #fff;
+  padding: 9px 16px;
+  transition: opacity .12s ease;
+}
+
+button:hover:not(:disabled) {
+  opacity: .85
+}
+
+button:disabled {
+  opacity: .4;
+  cursor: not-allowed
+}
+
+button.ghost {
+  background: transparent;
+  color: var(--ink)
+}
+
+button.small {
+  padding: 5px 10px;
+  font-size: 12.5px
+}
+
+:focus-visible {
+  outline: 2px solid var(--seal);
+  outline-offset: 2px
+}
+
+/* ---------- Layout ---------- */
+main {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 22px 24px 60px;
+  display: grid;
+  grid-template-columns: 1fr 372px;
+  gap: 26px;
+  align-items: start
+}
+
+@media(max-width:1000px) {
+  main {
+    grid-template-columns: 1fr
+  }
+}
+
+/* Cho phần tử con của grid co lại để bảng/địa chỉ dài không làm trang cuộn ngang trên điện thoại. */
+main > * {
+  min-width: 0
+}
+
+td.mono,
+.banner .mono,
+.banner b {
+  overflow-wrap: anywhere
+}
+
+nav {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 22px;
+  flex-wrap: wrap
+}
+
+nav button {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--ink-soft);
+  padding: 9px 15px 8px;
+  font-size: 14px;
+  margin-bottom: -1px;
+  border-radius: 0;
+}
+
+nav button.on {
+  color: var(--ink);
+  border-bottom-color: var(--seal);
+  font-weight: 500
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 22px
+}
+
+.panel h2 {
+  font-family: 'IBM Plex Serif', Cambria, 'Noto Serif', 'Times New Roman', serif;
+  font-size: 19px;
+  margin: 0 0 4px
+}
+
+.panel .lede {
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  margin: 0 0 20px
+}
+
+label {
+  display: block;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-soft);
+  margin: 0 0 5px
+}
+
+.hint {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin: 5px 0 0
+}
+
+input[type=text],
+input[type=file] {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 14px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+input.mono {
+  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12.5px
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--ink)
+}
+
+.field {
+  margin-bottom: 16px
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px
+}
+
+@media(max-width:620px) {
+  .row {
+    grid-template-columns: 1fr
+  }
+}
+
+/* ---------- Result card ---------- */
+.verdict {
+  border: 1px solid var(--rule);
+  border-left-width: 4px;
+  padding: 15px 17px;
+  margin-top: 20px;
+  border-radius: var(--radius)
+}
+
+.verdict.valid {
+  border-left-color: var(--valid)
+}
+
+.verdict.invalid {
+  border-left-color: var(--seal)
+}
+
+.verdict.none {
+  border-left-color: var(--ink-soft)
+}
+
+/* Hợp lệ trên chuỗi nhưng đơn vị cấp đã ngừng hoạt động mà không xoay khóa */
+.verdict.caution {
+  border-left-color: var(--pending);
+  background: #FBF6E9
+}
+
+.verdict.caution h3 {
+  color: var(--pending)
+}
+
+.verdict h3 {
+  margin: 0 0 3px;
+  font-size: 16px;
+  font-family: 'IBM Plex Serif', Cambria, 'Noto Serif', 'Times New Roman', serif
+}
+
+.verdict.valid h3 {
+  color: var(--valid)
+}
+
+.verdict.invalid h3 {
+  color: var(--seal)
+}
+
+.verdict p {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ink-soft)
+}
+
+dl {
+  margin: 14px 0 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 16px;
+  font-size: 12.5px
+}
+
+dt {
+  color: var(--ink-soft)
+}
+
+dd {
+  margin: 0;
+  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
+  word-break: break-all
+}
+
+.status-tag {
+  display: inline-block;
+  font-size: 11px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius)
+}
+
+.t-issued {
+  color: var(--valid)
+}
+
+.t-revoked {
+  color: var(--seal)
+}
+
+.t-none {
+  color: var(--ink-soft)
+}
+
+/* ---------- Table ---------- */
+.scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch
+}
+
+.scroll-x table {
+  min-width: 680px
+}
+
+th.num,
+td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums
+}
+
+td.num {
+  white-space: nowrap
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 6px
+}
+
+th {
+  text-align: left;
+  font-weight: 500;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--ink-soft);
+  border-bottom: 1px solid var(--rule);
+  padding: 7px 8px 7px 0
+}
+
+td {
+  padding: 10px 8px 10px 0;
+  border-bottom: 1px solid var(--rule-soft);
+  vertical-align: top
+}
+
+.empty {
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  padding: 22px 0;
+  text-align: center
+}
+
+/* ---------- Evidence ledger (signature element) ---------- */
+aside {
+  position: sticky;
+  top: 22px
+}
+
+.ledger {
+  background: var(--surface);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  overflow: hidden
+}
+
+.ledger-head {
+  border-bottom: 1px solid var(--ink);
+  padding: 13px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.ledger-head h2 {
+  font-family: 'IBM Plex Serif', Cambria, 'Noto Serif', 'Times New Roman', serif;
+  font-size: 15px;
+  margin: 0
+}
+
+.ledger-head span {
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: .07em
+}
+
+.ledger-body {
+  max-height: 60vh;
+  overflow-y: auto
+}
+
+.entry {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--rule-soft);
+  font-size: 12.5px
+}
+
+.entry:last-child {
+  border-bottom: none
+}
+
+.entry-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px
+}
+
+.entry-op {
+  font-weight: 500
+}
+
+.entry-time {
+  color: var(--ink-soft);
+  font-size: 11.5px
+}
+
+.entry dl {
+  margin-top: 6px;
+  font-size: 11.5px;
+  gap: 3px 12px
+}
+
+.entry .fail {
+  color: var(--seal)
+}
+
+.ledger-foot {
+  padding: 11px 16px;
+  border-top: 1px solid var(--ink);
+  display: flex;
+  gap: 8px
+}
+
+.note {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  border-left: 2px solid var(--rule);
+  padding-left: 11px;
+  margin-top: 18px
+}
+
+.banner {
+  background: #FBF6E9;
+  border: 1px solid #E0D2A8;
+  padding: 11px 14px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  margin-bottom: 18px
+}
+
+.banner.err {
+  background: #FBEDED;
+  border-color: #E3BEBE;
+  color: #7A2020
+}
+
+.hidden {
+  display: none
+}
+
+@media (prefers-reduced-motion:reduce) {
+  * {
+    transition: none !important
+  }
+}

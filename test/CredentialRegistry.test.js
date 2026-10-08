@@ -1,5 +1,7 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
+const { inherit, CR, time, INHERIT_DELAY } = require("./helpers");
+const { buildDirectory } = require("../scripts/lib/directory");
 
 // ---------------------------------------------------------------------------
 //  Bộ test cho kiến trúc V2 — sổ đăng ký dùng chung.
@@ -15,7 +17,7 @@ const FILE_B = ethers.keccak256(ethers.toUtf8Bytes("chung-chi-cua-binh.pdf"));
 async function fixture() {
   const [credverify, centerX, centerY, hotKey2, alice, bob, stranger] = await ethers.getSigners();
   const F = await ethers.getContractFactory("CredentialRegistry");
-  const reg = await F.deploy();
+  const reg = await F.deploy(INHERIT_DELAY);
   await reg.waitForDeployment();
   await reg.connect(credverify).addIssuer(centerX.address, "Trung tam dao tao X");
   await reg.connect(credverify).addIssuer(centerY.address, "Trung tam dao tao Y");
@@ -25,7 +27,7 @@ async function fixture() {
 const idOf = (issuer, hash) =>
   ethers.keccak256(ethers.solidityPacked(["address", "bytes32"], [issuer, hash]));
 
-describe("CredentialRegistry V2", function () {
+describe("CredentialRegistry (bộ test V2, cập nhật cho V3)", function () {
 
   // =========================================================================
   describe("1. Công nhận đơn vị phát hành", function () {
@@ -42,26 +44,26 @@ describe("CredentialRegistry V2", function () {
     it("BỊ CHẶN: người ngoài không công nhận được ai", async () => {
       const { reg, stranger, bob } = await fixture();
       await expect(reg.connect(stranger).addIssuer(bob.address, "Gia mao"))
-        .to.be.revertedWith("CredentialRegistry: caller is not owner");
+        .to.be.revertedWithCustomError(CR, "NotOwner");
     });
 
     it("BỊ CHẶN: owner không tự cấp quyền phát hành cho chính địa chỉ owner", async () => {
       const { reg, credverify } = await fixture();
       await expect(reg.connect(credverify).addIssuer(credverify.address, "CredVerify"))
-        .to.be.revertedWith("CredentialRegistry: owner cannot be an issuer");
+        .to.be.revertedWithCustomError(CR, "OwnerCannotBeIssuer");
     });
 
     it("BỊ CHẶN: tên rỗng", async () => {
       const { reg, credverify, stranger } = await fixture();
       await expect(reg.connect(credverify).addIssuer(stranger.address, ""))
-        .to.be.revertedWith("CredentialRegistry: empty name");
+        .to.be.revertedWithCustomError(CR, "EmptyName");
     });
 
     it("BỊ CHẶN: một địa chỉ đã dùng thì không công nhận lại được dưới tên khác", async () => {
       const { reg, credverify, centerX } = await fixture();
       await reg.connect(credverify).removeIssuer(centerX.address);
       await expect(reg.connect(credverify).addIssuer(centerX.address, "Ten khac hoan toan"))
-        .to.be.revertedWith("CredentialRegistry: address already used as issuer");
+        .to.be.revertedWithCustomError(CR, "AddressAlreadyUsed");
     });
 
     it("BẤT BIẾN: bật lại một khóa đã gỡ thì GIỮ NGUYÊN tên cũ", async () => {
@@ -75,9 +77,9 @@ describe("CredentialRegistry V2", function () {
 
     it("BỊ CHẶN: không bật lại được một khóa đã chuyển giao cho người kế nhiệm", async () => {
       const { reg, credverify, centerX, hotKey2 } = await fixture();
-      await reg.connect(credverify).inheritIssuer(centerX.address, hotKey2.address);
+      await inherit(reg.connect(credverify), centerX.address, hotKey2.address);
       await expect(reg.connect(credverify).restoreIssuer(centerX.address))
-        .to.be.revertedWith("CredentialRegistry: issuer was inherited, cannot restore");
+        .to.be.revertedWithCustomError(CR, "IssuerWasInherited");
     });
   });
 
@@ -86,52 +88,52 @@ describe("CredentialRegistry V2", function () {
     it("BỊ CHẶN: người ngoài không gỡ quyền được ai", async () => {
       const { reg, centerX, stranger } = await fixture();
       await expect(reg.connect(stranger).removeIssuer(centerX.address))
-        .to.be.revertedWith("CredentialRegistry: caller is not owner");
+        .to.be.revertedWithCustomError(CR, "NotOwner");
     });
 
     it("BỊ CHẶN: người ngoài không bật lại được ai", async () => {
       const { reg, credverify, centerX, stranger } = await fixture();
       await reg.connect(credverify).removeIssuer(centerX.address);
       await expect(reg.connect(stranger).restoreIssuer(centerX.address))
-        .to.be.revertedWith("CredentialRegistry: caller is not owner");
+        .to.be.revertedWithCustomError(CR, "NotOwner");
     });
 
     it("BỊ CHẶN: người ngoài không chuyển quyền owner được", async () => {
       const { reg, stranger, bob } = await fixture();
       await expect(reg.connect(stranger).transferOwnership(bob.address))
-        .to.be.revertedWith("CredentialRegistry: caller is not owner");
+        .to.be.revertedWithCustomError(CR, "NotOwner");
     });
 
     it("BỊ CHẶN: công nhận địa chỉ 0 làm đơn vị phát hành", async () => {
       const { reg, credverify } = await fixture();
       await expect(reg.connect(credverify).addIssuer(ethers.ZeroAddress, "Trung tam ma"))
-        .to.be.revertedWith("CredentialRegistry: zero address");
+        .to.be.revertedWithCustomError(CR, "ZeroAddress");
     });
 
     it("BỊ CHẶN: gỡ quyền một địa chỉ vốn không đang hoạt động", async () => {
       const { reg, credverify, centerX } = await fixture();
       await reg.connect(credverify).removeIssuer(centerX.address);
       await expect(reg.connect(credverify).removeIssuer(centerX.address))
-        .to.be.revertedWith("CredentialRegistry: issuer is not active");
+        .to.be.revertedWithCustomError(CR, "IssuerNotActive");
     });
 
     it("BỊ CHẶN: bật lại một đơn vị vốn đang hoạt động", async () => {
       const { reg, credverify, centerX } = await fixture();
       await expect(reg.connect(credverify).restoreIssuer(centerX.address))
-        .to.be.revertedWith("CredentialRegistry: issuer is not disabled");
+        .to.be.revertedWithCustomError(CR, "IssuerNotDisabled");
     });
 
     it("BỊ CHẶN: chuyển giao danh tính sang địa chỉ 0", async () => {
       const { reg, credverify, centerX } = await fixture();
-      await expect(reg.connect(credverify).inheritIssuer(centerX.address, ethers.ZeroAddress))
-        .to.be.revertedWith("CredentialRegistry: zero address");
+      await expect(reg.connect(credverify).proposeInherit(centerX.address, ethers.ZeroAddress, 0))
+        .to.be.revertedWithCustomError(CR, "ZeroAddress");
     });
 
     it("BỊ CHẶN: chuyển giao danh tính sang chính ví owner", async () => {
       const { reg, credverify, centerX } = await fixture();
 
-      await expect(reg.connect(credverify).inheritIssuer(centerX.address, credverify.address))
-        .to.be.revertedWith("CredentialRegistry: owner cannot be an issuer");
+      await expect(reg.connect(credverify).proposeInherit(centerX.address, credverify.address, 0))
+        .to.be.revertedWithCustomError(CR, "OwnerCannotBeIssuer");
     });
   });
 
@@ -141,7 +143,7 @@ describe("CredentialRegistry V2", function () {
     it("BỊ CHẶN: hai ví khác nhau KHÔNG mang được cùng một tên", async () => {
       const { reg, credverify, stranger } = await fixture();
       await expect(reg.connect(credverify).addIssuer(stranger.address, "Trung tam dao tao X"))
-        .to.be.revertedWith("CredentialRegistry: name already taken");
+        .to.be.revertedWithCustomError(CR, "NameTaken");
     });
 
     it("BẤT BIẾN: gỡ quyền một trung tâm KHÔNG trả tên đó lại cho người khác", async () => {
@@ -149,13 +151,13 @@ describe("CredentialRegistry V2", function () {
       await reg.connect(credverify).removeIssuer(centerX.address);
 
       await expect(reg.connect(credverify).addIssuer(stranger.address, "Trung tam dao tao X"))
-        .to.be.revertedWith("CredentialRegistry: name already taken");
+        .to.be.revertedWithCustomError(CR, "NameTaken");
       expect(await reg.issuerByName("Trung tam dao tao X")).to.equal(centerX.address);
     });
 
     it("chuyển giao thì TÊN ĐI THEO khóa mới, và vẫn chỉ một chủ", async () => {
       const { reg, credverify, centerX, hotKey2 } = await fixture();
-      await reg.connect(credverify).inheritIssuer(centerX.address, hotKey2.address);
+      await inherit(reg.connect(credverify), centerX.address, hotKey2.address);
       expect(await reg.issuerByName("Trung tam dao tao X")).to.equal(hotKey2.address);
     });
 
@@ -165,19 +167,24 @@ describe("CredentialRegistry V2", function () {
     });
 
     it("BẤT BIẾN: danh sách khả kiến không còn hai dòng trùng tên", async () => {
-      const { reg } = await fixture();
-      const [, names] = await reg.listActiveIssuers();
+      const { reg, credverify, centerX, hotKey2 } = await fixture();
+      await inherit(reg.connect(credverify), centerX.address, hotKey2.address);
+      const names = (await buildDirectory(reg)).active.map((k) => k.name);
       expect(new Set(names).size).to.equal(names.length);
     });
 
-    it("GIỚI HẠN ĐÃ BIẾT: tên GẦN GIỐNG vẫn đăng ký được — so khớp theo byte", async () => {
+    it("GIỚI HẠN ĐÃ BIẾT: tên khác chữ hoa/thường vẫn đăng ký được — so khớp theo byte (Kirin bị chặn)", async () => {
       const { reg, credverify, stranger, bob } = await fixture();
-      // Bỏ dấu: contract thấy đây là hai chuỗi byte khác nhau.
-      await reg.connect(credverify).addIssuer(stranger.address, "Trung tam dao tao  X");
-      // Chữ 'A' Kirin (U+0410) trông y hệt 'A' Latin trên màn hình.
-      await reg.connect(credverify).addIssuer(bob.address, "Trung tam dаo tao X");
-      const [, names] = await reg.listActiveIssuers();
-      expect(names).to.have.lengthOf(4);
+      // Khác chữ hoa/thường: contract thấy đây là hai chuỗi byte khác nhau.
+      // (Hai khoảng trắng liền nhau bị chặn — NameNotCanonical.)
+      await reg.connect(credverify).addIssuer(stranger.address, "Trung Tam dao tao X");
+      // Khác chữ hoa/thường ở chỗ khác: vẫn là chuỗi byte khác.
+      await reg.connect(credverify).addIssuer(bob.address, "Trung tam DAO tao X");
+      expect((await buildDirectory(reg)).active).to.have.lengthOf(4);
+      // Chữ Kirin (trông y hệt Latin) bị danh sách cho phép CHẶN trên chuỗi.
+      const [, , , , , , , , , extra] = await ethers.getSigners();
+      await expect(reg.connect(credverify).addIssuer(extra.address, "Trung tam d\u0430o tao X"))
+        .to.be.revertedWithCustomError(reg, "NameNotCanonical");
       // Test này PASS để ghim một rủi ro còn lại, không phải để khẳng định đã vá.
       // Ràng buộc `nameHolder` chặn trùng tên Y HỆT, không chặn tên gần giống.
     });
@@ -206,39 +213,39 @@ describe("CredentialRegistry V2", function () {
     it("BỊ CHẶN: ví không có quyền cấp", async () => {
       const { reg, stranger, alice } = await fixture();
       await expect(reg.connect(stranger).issueCertificate(FILE_A, alice.address))
-        .to.be.revertedWith("CredentialRegistry: caller is not an active issuer");
+        .to.be.revertedWithCustomError(CR, "NotActiveIssuer");
     });
 
     it("BỊ CHẶN: khóa đã bị gỡ quyền không cấp được nữa", async () => {
       const { reg, credverify, centerX, alice } = await fixture();
       await reg.connect(credverify).removeIssuer(centerX.address);
       await expect(reg.connect(centerX).issueCertificate(FILE_A, alice.address))
-        .to.be.revertedWith("CredentialRegistry: caller is not an active issuer");
+        .to.be.revertedWithCustomError(CR, "NotActiveIssuer");
     });
 
     it("BỊ CHẶN: owner KHÔNG cấp được chứng chỉ — không có đường nào dẫn tới", async () => {
       const { reg, credverify, alice } = await fixture();
       await expect(reg.connect(credverify).issueCertificate(FILE_A, alice.address))
-        .to.be.revertedWith("CredentialRegistry: caller is not an active issuer");
+        .to.be.revertedWithCustomError(CR, "NotActiveIssuer");
     });
 
     it("BỊ CHẶN: hash rỗng", async () => {
       const { reg, centerX, alice } = await fixture();
       await expect(reg.connect(centerX).issueCertificate(ethers.ZeroHash, alice.address))
-        .to.be.revertedWith("CredentialRegistry: empty certHash");
+        .to.be.revertedWithCustomError(CR, "EmptyCertHash");
     });
 
     it("BỊ CHẶN: học viên là địa chỉ 0", async () => {
       const { reg, centerX } = await fixture();
       await expect(reg.connect(centerX).issueCertificate(FILE_A, ethers.ZeroAddress))
-        .to.be.revertedWith("CredentialRegistry: holder is zero address");
+        .to.be.revertedWithCustomError(CR, "HolderZero");
     });
 
     it("BỊ CHẶN: cùng một issuer cấp trùng một tệp hai lần", async () => {
       const { reg, centerX, alice, bob } = await fixture();
       await reg.connect(centerX).issueCertificate(FILE_A, alice.address);
       await expect(reg.connect(centerX).issueCertificate(FILE_A, bob.address))
-        .to.be.revertedWith("CredentialRegistry: certificate already exists for this issuer and file");
+        .to.be.revertedWithCustomError(CR, "CertificateExists");
     });
   });
 
@@ -262,25 +269,25 @@ describe("CredentialRegistry V2", function () {
       const { reg, centerX, centerY, alice } = await fixture();
       await reg.connect(centerX).issueCertificate(FILE_A, alice.address);
       await expect(reg.connect(centerY).revokeCertificate(idOf(centerX.address, FILE_A)))
-        .to.be.revertedWith("CredentialRegistry: not the issuing key or its successor");
+        .to.be.revertedWithCustomError(CR, "NotIssuingKeyOrSuccessor");
     });
 
-    it("findByHash() cho verifier thấy CẢ HAI bản ghi và ai đã cấp", async () => {
+    it("verifier chọn ĐÚNG đơn vị ghi trên chứng chỉ thì thấy đúng bản ghi của đơn vị đó", async () => {
       const { reg, centerX, centerY, alice, bob } = await fixture();
       await reg.connect(centerX).issueCertificate(FILE_A, alice.address);
       await reg.connect(centerY).issueCertificate(FILE_A, bob.address);
-      const [issuers, ids, statuses] = await reg.findByHash(FILE_A);
-      expect(issuers).to.have.lengthOf(2);
-      expect(issuers).to.include(centerX.address);
-      expect(issuers).to.include(centerY.address);
-      expect(statuses.every((s) => s === 1n)).to.equal(true);
-      expect(ids[0]).to.not.equal(ids[1]);
+      const rx = await reg.verifyCertificate(centerX.address, FILE_A);
+      const ry = await reg.verifyCertificate(centerY.address, FILE_A);
+      expect(rx.holder).to.equal(alice.address);
+      expect(ry.holder).to.equal(bob.address);
+      expect(rx.issuerDisplayName).to.equal("Trung tam dao tao X");
     });
 
-    it("findByHash() trả về rỗng cho một tệp chưa từng đăng ký", async () => {
+    it("CHỦ ĐÍCH: findByHash đã bị gỡ — không còn hàm view nào duyệt toàn bộ danh bạ", async () => {
       const { reg } = await fixture();
-      const [issuers] = await reg.findByHash(FILE_B);
-      expect(issuers).to.have.lengthOf(0);
+      for (const fn of ["findByHash", "listActiveIssuers", "knownIssuers"]) {
+        expect(reg.interface.getFunction(fn)).to.equal(null);
+      }
     });
   });
 
@@ -305,7 +312,7 @@ describe("CredentialRegistry V2", function () {
       await reg.connect(centerX).revokeCertificate(certId);
       // Đây là điểm chống "nói hai lời": tra tháng 3 thấy Revoked thì tháng 8 vẫn Revoked.
       await expect(reg.connect(centerX).issueCertificate(FILE_A, bob.address))
-        .to.be.revertedWith("CredentialRegistry: certificate already exists for this issuer and file");
+        .to.be.revertedWithCustomError(CR, "CertificateExists");
       expect((await reg.getCertificate(certId)).status).to.equal(2);
     });
 
@@ -315,27 +322,27 @@ describe("CredentialRegistry V2", function () {
       await reg.connect(centerX).issueCertificate(FILE_A, alice.address);
       await reg.connect(centerX).revokeCertificate(certId);
       await expect(reg.connect(centerX).revokeCertificate(certId))
-        .to.be.revertedWith("CredentialRegistry: certificate not in Issued state");
+        .to.be.revertedWithCustomError(CR, "NotRevocable");
     });
 
     it("BỊ CHẶN: thu hồi một chứng chỉ chưa từng tồn tại", async () => {
       const { reg, centerX } = await fixture();
       await expect(reg.connect(centerX).revokeCertificate(idOf(centerX.address, FILE_B)))
-        .to.be.revertedWith("CredentialRegistry: certificate not in Issued state");
+        .to.be.revertedWithCustomError(CR, "NotRevocable");
     });
 
     it("BỊ CHẶN: owner KHÔNG thu hồi được — quyền này không thuộc về đơn vị vận hành", async () => {
       const { reg, credverify, centerX, alice } = await fixture();
       await reg.connect(centerX).issueCertificate(FILE_A, alice.address);
       await expect(reg.connect(credverify).revokeCertificate(idOf(centerX.address, FILE_A)))
-        .to.be.revertedWith("CredentialRegistry: caller is not an active issuer");
+        .to.be.revertedWithCustomError(CR, "NotActiveIssuer");
     });
 
     it("BỊ CHẶN: người lạ không thu hồi được", async () => {
       const { reg, centerX, alice, stranger } = await fixture();
       await reg.connect(centerX).issueCertificate(FILE_A, alice.address);
       await expect(reg.connect(stranger).revokeCertificate(idOf(centerX.address, FILE_A)))
-        .to.be.revertedWith("CredentialRegistry: caller is not an active issuer");
+        .to.be.revertedWithCustomError(CR, "NotActiveIssuer");
     });
 
     it("BỊ CHẶN: khóa ĐÃ BỊ GỠ QUYỀN mất luôn quyền thu hồi", async () => {
@@ -344,7 +351,7 @@ describe("CredentialRegistry V2", function () {
       await reg.connect(credverify).removeIssuer(centerX.address);
       // Trong V1 đây là chỗ một khóa đã lộ vẫn phá hoại được.
       await expect(reg.connect(centerX).revokeCertificate(idOf(centerX.address, FILE_A)))
-        .to.be.revertedWith("CredentialRegistry: caller is not an active issuer");
+        .to.be.revertedWithCustomError(CR, "NotActiveIssuer");
     });
   });
 
@@ -354,14 +361,14 @@ describe("CredentialRegistry V2", function () {
     it("khóa kế nhiệm thu hồi được chứng chỉ do khóa cũ đã cấp", async () => {
       const { reg, credverify, centerX, hotKey2, alice } = await fixture();
       await reg.connect(centerX).issueCertificate(FILE_A, alice.address);
-      await reg.connect(credverify).inheritIssuer(centerX.address, hotKey2.address);
+      await inherit(reg.connect(credverify), centerX.address, hotKey2.address);
       await reg.connect(hotKey2).revokeCertificate(idOf(centerX.address, FILE_A));
       expect((await reg.getCertificate(idOf(centerX.address, FILE_A))).status).to.equal(2);
     });
 
     it("chuyển giao chép TÊN sang khóa mới — trung tâm không mất danh tính", async () => {
       const { reg, credverify, centerX, hotKey2 } = await fixture();
-      await reg.connect(credverify).inheritIssuer(centerX.address, hotKey2.address);
+      await inherit(reg.connect(credverify), centerX.address, hotKey2.address);
       expect(await reg.issuerName(hotKey2.address)).to.equal("Trung tam dao tao X");
       expect(await reg.issuerStatus(centerX.address)).to.equal(2); // Disabled
       expect(await reg.issuerStatus(hotKey2.address)).to.equal(1); // Active
@@ -371,42 +378,42 @@ describe("CredentialRegistry V2", function () {
     it("BỊ CHẶN: khóa kế nhiệm ĐÃ BỊ GỠ cũng mất quyền thu hồi", async () => {
       const { reg, credverify, centerX, hotKey2, alice } = await fixture();
       await reg.connect(centerX).issueCertificate(FILE_A, alice.address);
-      await reg.connect(credverify).inheritIssuer(centerX.address, hotKey2.address);
+      await inherit(reg.connect(credverify), centerX.address, hotKey2.address);
       await reg.connect(credverify).removeIssuer(hotKey2.address);
       // Cửa hậu của V1: nhánh kế nhiệm thiếu điều kiện "đang hoạt động".
       await expect(reg.connect(hotKey2).revokeCertificate(idOf(centerX.address, FILE_A)))
-        .to.be.revertedWith("CredentialRegistry: caller is not an active issuer");
+        .to.be.revertedWithCustomError(CR, "NotActiveIssuer");
     });
 
     it("BỊ CHẶN: chỉ owner chuyển giao được danh tính issuer", async () => {
       const { reg, centerX, hotKey2 } = await fixture();
-      await expect(reg.connect(centerX).inheritIssuer(centerX.address, hotKey2.address))
-        .to.be.revertedWith("CredentialRegistry: caller is not owner");
+      await expect(reg.connect(centerX).proposeInherit(centerX.address, hotKey2.address, 0))
+        .to.be.revertedWithCustomError(CR, "NotOwner");
     });
 
     it("BỊ CHẶN: không chuyển giao sang một địa chỉ đã dùng làm issuer", async () => {
       const { reg, credverify, centerX, centerY } = await fixture();
-      await expect(reg.connect(credverify).inheritIssuer(centerX.address, centerY.address))
-        .to.be.revertedWith("CredentialRegistry: address already used as issuer");
+      await expect(reg.connect(credverify).proposeInherit(centerX.address, centerY.address, 0))
+        .to.be.revertedWithCustomError(CR, "AddressAlreadyUsed");
     });
 
     it("chuỗi kế nhiệm hai bậc: X -> K2 -> K3, K3 vẫn dọn được hậu quả của X", async () => {
       const { reg, credverify, centerX, hotKey2, alice, stranger } = await fixture();
       await reg.connect(centerX).issueCertificate(FILE_A, alice.address);
-      await reg.connect(credverify).inheritIssuer(centerX.address, hotKey2.address);
-      await reg.connect(credverify).inheritIssuer(hotKey2.address, stranger.address);
+      await inherit(reg.connect(credverify), centerX.address, hotKey2.address);
+      await inherit(reg.connect(credverify), hotKey2.address, stranger.address);
       await reg.connect(stranger).revokeCertificate(idOf(centerX.address, FILE_A));
       expect((await reg.getCertificate(idOf(centerX.address, FILE_A))).status).to.equal(2);
     });
 
     it("CHỦ ĐÍCH: kế nhiệm chỉ chảy XUÔI — khóa cũ không thu hồi hộ khóa mới", async () => {
       const { reg, credverify, centerX, hotKey2, alice } = await fixture();
-      await reg.connect(credverify).inheritIssuer(centerX.address, hotKey2.address);
+      await inherit(reg.connect(credverify), centerX.address, hotKey2.address);
       await reg.connect(hotKey2).issueCertificate(FILE_B, alice.address);
       await reg.connect(credverify).restoreIssuer(centerX.address).catch(() => {});
       // centerX đã Disabled và không restore được (đã chuyển giao) -> không có đường nào
       await expect(reg.connect(centerX).revokeCertificate(idOf(hotKey2.address, FILE_B)))
-        .to.be.revertedWith("CredentialRegistry: caller is not an active issuer");
+        .to.be.revertedWithCustomError(CR, "NotActiveIssuer");
     });
 
     it("KỊCH BẢN ĐẦU-CUỐI: lộ khóa -> chuyển giao -> khóa cũ tê liệt -> khóa mới dọn hậu quả", async () => {
@@ -416,13 +423,13 @@ describe("CredentialRegistry V2", function () {
       // 2. Khóa bị lộ, kẻ tấn công cấp bậy một chứng chỉ
       await reg.connect(centerX).issueCertificate(FILE_B, bob.address);
       // 3. Phát hiện -> owner chuyển giao danh tính sang khóa lạnh mới
-      await reg.connect(credverify).inheritIssuer(centerX.address, hotKey2.address);
+      await inherit(reg.connect(credverify), centerX.address, hotKey2.address);
       // 4. Khóa lộ tê liệt hoàn toàn: không cấp được, không thu hồi được
       await expect(reg.connect(centerX).issueCertificate(
         ethers.keccak256(ethers.toUtf8Bytes("them-mot-cai-nua")), bob.address
-      )).to.be.revertedWith("CredentialRegistry: caller is not an active issuer");
+      )).to.be.revertedWithCustomError(CR, "NotActiveIssuer");
       await expect(reg.connect(centerX).revokeCertificate(idOf(centerX.address, FILE_A)))
-        .to.be.revertedWith("CredentialRegistry: caller is not an active issuer");
+        .to.be.revertedWithCustomError(CR, "NotActiveIssuer");
       // 5. Khóa mới dọn chứng chỉ bậy, GIỮ chứng chỉ hợp lệ
       await reg.connect(hotKey2).revokeCertificate(idOf(centerX.address, FILE_B));
       expect((await reg.getCertificate(idOf(centerX.address, FILE_B))).status).to.equal(2);
@@ -485,30 +492,44 @@ describe("CredentialRegistry V2", function () {
   // =========================================================================
   describe("7. Khả kiến — issuer thêm lén không còn vô hình", function () {
 
-    it("listActiveIssuers() trả về địa chỉ KÈM tên", async () => {
+    it("danh bạ dựng từ event trả về địa chỉ KÈM tên", async () => {
       const { reg, centerX, centerY } = await fixture();
-      const [addrs, names] = await reg.listActiveIssuers();
-      expect(addrs).to.have.lengthOf(2);
-      expect(names).to.include("Trung tam dao tao X");
-      expect(names).to.include("Trung tam dao tao Y");
-      expect(addrs).to.include(centerX.address);
-      expect(addrs).to.include(centerY.address);
+      const d = await buildDirectory(reg);
+      expect(d.active.map((k) => k.address)).to.have.members([centerX.address, centerY.address]);
+      expect(d.active.map((k) => k.name)).to.have.members(["Trung tam dao tao X", "Trung tam dao tao Y"]);
     });
 
-    it("owner thêm một issuer lén thì nó HIỆN NGAY trong danh sách", async () => {
+    it("owner thêm một issuer lén thì nó HIỆN NGAY trong danh bạ (event IssuerAdded vĩnh viễn)", async () => {
       const { reg, credverify, stranger } = await fixture();
       await reg.connect(credverify).addIssuer(stranger.address, "Trung tam ma");
-      const [addrs, names] = await reg.listActiveIssuers();
-      expect(addrs).to.have.lengthOf(3);
-      expect(names).to.include("Trung tam ma");
+      const d = await buildDirectory(reg);
+      expect(d.active).to.have.lengthOf(3);
+      expect(d.active.map((k) => k.name)).to.include("Trung tam ma");
     });
 
-    it("knownIssuers() giữ cả khóa đã bị gỡ, phục vụ kiểm toán", async () => {
-      const { reg, credverify, centerX } = await fixture();
-      await reg.connect(credverify).removeIssuer(centerX.address);
-      expect(await reg.knownIssuers()).to.include(centerX.address);
-      const [addrs] = await reg.listActiveIssuers();
-      expect(addrs).to.not.include(centerX.address);
+    it("danh bạ từ event giữ cả khóa đã gỡ và chuỗi kế nhiệm, phục vụ kiểm toán", async () => {
+      const { reg, credverify, centerX, centerY, hotKey2 } = await fixture();
+      await reg.connect(credverify).removeIssuer(centerY.address);
+      await inherit(reg.connect(credverify), centerX.address, hotKey2.address);
+      const d = await buildDirectory(reg);
+      expect(d.byAddress(centerY.address).status).to.equal(2);
+      expect(d.byAddress(centerX.address).status).to.equal(2);
+      expect(d.byAddress(centerX.address).successor).to.equal(hotKey2.address);
+      expect(d.byAddress(hotKey2.address).name).to.equal("Trung tam dao tao X");
+      expect(d.active.map((k) => k.address)).to.deep.equal([hotKey2.address]);
+    });
+
+    it("BẤT BIẾN: số đơn vị Active dựng từ event KHỚP activeIssuerCount trên chuỗi, qua mọi thao tác quản trị", async () => {
+      const { reg, credverify, centerX, centerY, hotKey2, stranger, bob } = await fixture();
+      const check = async () =>
+        expect((await buildDirectory(reg)).active.length).to.equal(Number(await reg.activeIssuerCount()));
+      await check();
+      await reg.connect(credverify).addIssuer(stranger.address, "Z"); await check();
+      await reg.connect(credverify).removeIssuer(centerY.address); await check();
+      await reg.connect(credverify).restoreIssuer(centerY.address); await check();
+      await inherit(reg.connect(credverify), centerX.address, hotKey2.address); await check();
+      await reg.connect(credverify).removeIssuer(stranger.address); await check();
+      await inherit(reg.connect(credverify), stranger.address, bob.address); await check();
     });
 
     it("governance() trả về toàn bộ trạng thái quản trị trong một lời gọi", async () => {
@@ -517,7 +538,6 @@ describe("CredentialRegistry V2", function () {
       expect(g.owner_).to.equal(credverify.address);
       expect(g.pendingOwner_).to.equal(ethers.ZeroAddress);
       expect(g.activeIssuerCount_).to.equal(2);
-      expect(g.knownIssuerCount_).to.equal(2);
     });
   });
 
@@ -537,13 +557,13 @@ describe("CredentialRegistry V2", function () {
       const { reg, credverify, stranger, bob } = await fixture();
       await reg.connect(credverify).transferOwnership(stranger.address);
       await expect(reg.connect(bob).acceptOwnership())
-        .to.be.revertedWith("CredentialRegistry: not pending owner");
+        .to.be.revertedWithCustomError(CR, "NotPendingOwner");
     });
 
     it("BỊ CHẶN: chuyển quyền cho địa chỉ 0", async () => {
       const { reg, credverify } = await fixture();
       await expect(reg.connect(credverify).transferOwnership(ethers.ZeroAddress))
-        .to.be.revertedWith("CredentialRegistry: zero address");
+        .to.be.revertedWithCustomError(CR, "ZeroAddress");
     });
   });
 
@@ -564,24 +584,28 @@ describe("CredentialRegistry V2", function () {
         .map((f) => f.name);
       // Toàn bộ hàm ghi của contract, liệt kê tường minh để test vỡ khi có ai thêm hàm mới.
       expect(writers.sort()).to.deep.equal([
-        "acceptOwnership", "addIssuer", "inheritIssuer", "issueCertificate",
-        "removeIssuer", "restoreIssuer", "revokeCertificate", "transferOwnership",
+        "acceptOwnership", "addIssuer", "cancelInherit", "cancelOwnershipTransfer",
+        "executeInherit", "issueCertificate", "proposeInherit",
+        "publishBatch", "removeIssuer", "restoreIssuer", "revokeBatch",
+        "revokeCertificate", "revokeLeaf", "transferOwnership",
       ]);
-      // Trong số đó, hai hàm chạm vào `certificates` đều KHÔNG phải onlyOwner
+      // Trong số đó, năm hàm chạm vào `certificates`/`batches`/`leafRevocation`
+      // (issueCertificate, revokeCertificate, publishBatch, revokeLeaf, revokeBatch)
+      // đều KHÔNG phải onlyOwner — xem test/CredentialRegistryV3.test.js mục "owner không cấp/thu hồi lô".
     });
 
     it("RỦI RO CÒN LẠI: owner cướp được danh tính một trung tâm đang hoạt động", async () => {
       const { reg, credverify, centerX, hotKey2, alice } = await fixture();
       // hotKey2 ở đây đóng vai một ví do CHÍNH OWNER kiểm soát.
-      await expect(reg.connect(credverify).inheritIssuer(centerX.address, hotKey2.address))
+      await expect(inherit(reg.connect(credverify), centerX.address, hotKey2.address))
         .to.emit(reg, "IssuerInherited").withArgs(centerX.address, hotKey2.address, "Trung tam dao tao X");
       await reg.connect(hotKey2).issueCertificate(FILE_A, alice.address);
       const r = await reg.verifyCertificate(hotKey2.address, FILE_A);
       expect(r.valid).to.equal(true);
       expect(r.issuerDisplayName).to.equal("Trung tam dao tao X");
-      // Đây là ranh giới tin cậy đã công bố.
-      // Cơ chế bù duy nhất là tính CÔNG KHAI: event IssuerInherited tồn tại vĩnh viễn,
-      // và trung tâm thật nhận ra ngay khi khóa của mình ngừng cấp được.
+      // Đây là ranh giới tin cậy đã công bố, được thu hẹp: chuyển giao phải qua đề xuất
+      // CÔNG KHAI (event InheritProposed) và chờ INHERIT_DELAY = 48 giờ, đủ để trung tâm thật
+      // thấy và phản đối; owner nên là ví đa chữ ký (Safe 2-trên-3) khi triển khai thật.
     });
   });
 
@@ -598,34 +622,39 @@ describe("CredentialRegistry V2", function () {
       return f;
     }
 
-    it("QUY TRÌNH ĐÚNG: inheritIssuer khi khóa xấu CÒN Active -> khóa dọn dẹp thu hồi được", async () => {
+    it("QUY TRÌNH ĐÚNG: chuyển giao (propose→execute) khi khóa xấu CÒN Active -> khóa dọn dẹp thu hồi được", async () => {
       const { reg, credverify, centerX, hotKey2 } = await coSuCo();
-      await reg.connect(credverify).inheritIssuer(centerX.address, hotKey2.address);
+      await inherit(reg.connect(credverify), centerX.address, hotKey2.address);
       await reg.connect(hotKey2).revokeCertificate(idOf(centerX.address, FILE_A));
       await reg.connect(hotKey2).revokeCertificate(idOf(centerX.address, FILE_B));
       expect((await reg.getCertificate(idOf(centerX.address, FILE_A))).status).to.equal(2);
       expect((await reg.getCertificate(idOf(centerX.address, FILE_B))).status).to.equal(2);
     });
 
-    it("BẪY VẬN HÀNH: gọi removeIssuer TRƯỚC thì inheritIssuer revert", async () => {
+    it("V3 — HẾT BẪY VẬN HÀNH: removeIssuer TRƯỚC rồi chuyển giao (propose→execute) vẫn chạy, khóa mới dọn được", async () => {
       const { reg, credverify, centerX, hotKey2 } = await coSuCo();
       // Phản xạ tự nhiên khi phát hiện sự cố là "chặn máu" bằng removeIssuer.
-      // Đúng về trực giác, nhưng nó đóng luôn cánh cửa chuyển giao.
+      // V2: nước đi này đóng cánh cửa chuyển giao. V3: không còn.
       await reg.connect(credverify).removeIssuer(centerX.address);
-      await expect(reg.connect(credverify).inheritIssuer(centerX.address, hotKey2.address))
-        .to.be.revertedWith("CredentialRegistry: old address is not an active issuer");
-    });
-
-    it("KHÔNG CÓ NGÕ CỤT: restoreIssuer -> inheritIssuer -> thu hồi, vẫn cứu được", async () => {
-      const { reg, credverify, centerX, hotKey2 } = await coSuCo();
-      await reg.connect(credverify).removeIssuer(centerX.address);
-      await reg.connect(credverify).restoreIssuer(centerX.address);
-      await reg.connect(credverify).inheritIssuer(centerX.address, hotKey2.address);
+      await inherit(reg.connect(credverify), centerX.address, hotKey2.address);
       await reg.connect(hotKey2).revokeCertificate(idOf(centerX.address, FILE_A));
       expect((await reg.getCertificate(idOf(centerX.address, FILE_A))).status).to.equal(2);
     });
 
-    it("R4 — CHUỖI KẾ NHIỆM CẠN SAU 8 ĐỜI: chứng chỉ đời đầu mất khả năng thu hồi", async () => {
+    it("V3 — KHÔNG CẦN restoreIssuer: khóa lộ KHÔNG BAO GIỜ Active trở lại trong quá trình dọn", async () => {
+      const { reg, credverify, centerX, hotKey2 } = await coSuCo();
+      // V2 buộc owner restoreIssuer(khóa lộ) rồi mới inheritIssuer được — giữa hai giao
+      // dịch đó kẻ giữ khóa lộ có thể chen vào thu hồi VĨNH VIỄN chứng chỉ thật.
+      await reg.connect(credverify).removeIssuer(centerX.address);
+      await expect(reg.connect(centerX).revokeCertificate(idOf(centerX.address, FILE_A)))
+        .to.be.revertedWithCustomError(CR, "NotActiveIssuer");
+      await inherit(reg.connect(credverify), centerX.address, hotKey2.address);
+      await expect(reg.connect(centerX).revokeCertificate(idOf(centerX.address, FILE_A)))
+        .to.be.revertedWithCustomError(CR, "NotActiveIssuer");
+      expect(await reg.issuerStatus(centerX.address)).to.equal(2);
+    });
+
+    it("R4 ĐÃ ĐÓNG: sau 9 lần chuyển giao, khóa mới nhất vẫn thu hồi được chứng chỉ đời đầu", async () => {
       const { reg, credverify, centerX, alice } = await fixture();
       const all = await ethers.getSigners();
       const chain = all.slice(6, 16);            // 10 ví dự phòng, đủ cho 9 lần chuyển giao
@@ -636,26 +665,25 @@ describe("CredentialRegistry V2", function () {
 
       let cur = centerX;
       for (let doi = 1; doi <= 8; doi++) {
-        await reg.connect(credverify).inheritIssuer(cur.address, chain[doi - 1].address);
+        await inherit(reg.connect(credverify), cur.address, chain[doi - 1].address);
         cur = chain[doi - 1];
       }
       // Đời thứ 8 vẫn với tới được khóa gốc.
       await reg.connect(cur).revokeCertificate.staticCall(certId);
 
-      // Đời thứ 9 thì không. MAX_INHERIT_HOPS = 8 nên vòng lặp cạn trước khi tới nơi.
-      await reg.connect(credverify).inheritIssuer(cur.address, chain[8].address);
-      await expect(reg.connect(chain[8]).revokeCertificate(certId))
-        .to.be.revertedWith("CredentialRegistry: not the issuing key or its successor");
-
-      // Chứng chỉ vẫn còn hiệu lực và KHÔNG AI thu hồi được nữa — kể cả owner.
-      expect((await reg.getCertificate(certId)).status).to.equal(1);
+      // V2: đời thứ 9 thì không (MAX_INHERIT_HOPS = 8). V3: quyền thu hồi kiểm bằng
+      // `identityOf` (O(1)), không còn vòng lặp nên không còn trần.
+      await inherit(reg.connect(credverify), cur.address, chain[8].address);
+      expect(await reg.currentKeyOf(centerX.address)).to.equal(chain[8].address);
+      await reg.connect(chain[8]).revokeCertificate(certId);
+      expect((await reg.getCertificate(certId)).status).to.equal(2);
+      // Owner vẫn không thu hồi được.
       await expect(reg.connect(credverify).revokeCertificate(certId)).to.be.reverted;
-      // Cách phòng: cấp lại chứng chỉ bằng khóa hiện hành TRƯỚC khi chạm trần 8 đời.
     });
 
-    it("GIỚI HẠN THẬT: thu hồi TỪNG chứng chỉ một — không có thu hồi hàng loạt", async () => {
+    it("GIỚI HẠN (đường cấp lẻ): thu hồi TỪNG chứng chỉ một — cấp theo lô thì có revokeBatch", async () => {
       const { reg, credverify, centerX, hotKey2 } = await coSuCo();
-      await reg.connect(credverify).inheritIssuer(centerX.address, hotKey2.address);
+      await inherit(reg.connect(credverify), centerX.address, hotKey2.address);
       await reg.connect(hotKey2).revokeCertificate(idOf(centerX.address, FILE_A));
       expect((await reg.getCertificate(idOf(centerX.address, FILE_B))).status).to.equal(1);
       // N chứng chỉ giả = N giao dịch. Đây mới là giới hạn thật của cơ chế dọn dẹp,

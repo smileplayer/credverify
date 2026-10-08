@@ -13,10 +13,12 @@
  */
 
 const hre = require("hardhat");
+const { PRODUCTION_DEFAULT: PROD_DELAY } = require("./lib/delay");
 const fs = require("fs");
 const path = require("path");
 
 const { execSync } = require("child_process");
+const { buildDirectory } = require("./lib/directory");
 
 function runTests() {
   const t0 = process.hrtime.bigint();
@@ -141,7 +143,7 @@ function readCoverage() {
 
 async function main() {
   const net = await hre.ethers.provider.getNetwork();
-  const [credverify, centerX, centerY, newKeyX, student, attacker] =
+  const [credverify, centerX, centerY, newKeyX, student, attacker, recruiter] =
     await hre.ethers.getSigners();
 
   console.log("Mạng:", hre.network.name, "| chainId:", net.chainId.toString());
@@ -149,7 +151,7 @@ async function main() {
   // ---------- Bước 1: deploy ----------
   const Factory = await hre.ethers.getContractFactory("CredentialRegistry");
   const deployRun = await timed(async () => {
-    const r = await Factory.deploy();       // V2: constructor không tham số
+    const r = await Factory.deploy(PROD_DELAY);   // độ trễ production (48 giờ); script tua thời gian
     await r.waitForDeployment();
     return r;
   });
@@ -188,12 +190,10 @@ async function main() {
   console.log("Đang đo độ trễ thao tác đọc (" + READ_SAMPLES + " mẫu mỗi thao tác)…");
   await measureRead("verifyCertificate — nhà tuyển dụng xác minh khi ĐÃ BIẾT đơn vị cấp (đường O(1))",
     () => registry.verifyCertificate(centerX.address, certHash));
-  await measureRead("findByHash — nhà tuyển dụng KHÔNG biết đơn vị cấp (đường dự phòng O(n))",
-    () => registry.findByHash(certHash));
-  await measureRead("getCertificate — giao diện làm mới trạng thái một chứng chỉ",
-    () => registry.getCertificate(certId));
-  await measureRead("listActiveIssuers — giao diện dựng danh bạ đơn vị phát hành",
-    () => registry.listActiveIssuers());
+  await measureRead("effectiveStatus — giao diện làm mới trạng thái HIỆU LỰC một chứng chỉ",
+    () => registry.effectiveStatus(certId));
+  await measureRead("buildDirectory — giao diện dựng danh bạ đơn vị phát hành từ event",
+    () => buildDirectory(registry));
   await measureRead("keccak256 — băm tệp PDF trên máy người dùng (" + (pdfData.length / 1024).toFixed(0) + " KB)",
     async () => hre.ethers.keccak256(pdfData));
 
@@ -212,7 +212,9 @@ async function main() {
       await fn();
       blocked.push({ action: label, expected, reason: "KHÔNG BỊ CHẶN — cần xem lại contract" });
     } catch (err) {
-      blocked.push({ action: label, expected, reason: err.reason || err.shortMessage || err.message });
+      // Custom error: ethers giải mã thành err.revert.name nhờ ABI.
+      const why = err.revert ? "revert `" + err.revert.name + "()`" : (err.reason || err.shortMessage || err.message);
+      blocked.push({ action: label, expected, reason: why });
     }
   };
 
@@ -266,60 +268,93 @@ async function main() {
     "Giao dịch phải revert",
     () => registry.connect(centerX).revokeCertificate(certId));
 
-  // ---------- Bước 12–15: kịch bản lộ khóa và dọn hậu quả ----------
+  // ---------- Bước 12–17: kịch bản lộ khóa và dọn hậu quả ----------
   console.log("Đang chạy kịch bản lộ khóa…");
+  const realHash2 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("BANG-THAT-THU-HAI-CUA-TRUNG-TAM-X"));
+  await (await registry.connect(centerX).issueCertificate(realHash2, student.address)).wait();
+  const realId2 = await registry.certIdOf(centerX.address, realHash2);
+  const compromisedSince = (await hre.ethers.provider.getBlock("latest")).timestamp + 1; // khóa lộ từ đây
+
   const fakeHash = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("BANG-GIA-DO-KHOA-BI-LO"));
   run = await timed(async () =>
     (await registry.connect(centerX).issueCertificate(fakeHash, attacker.address)).wait());
   recordTx(12, "issueCertificate — kẻ tấn công dùng khóa đã lộ của Trung tâm X cấp một bằng giả",
     run.result, "", run.ms);
   const fakeId = await registry.certIdOf(centerX.address, fakeHash);
-
-  // THỨ TỰ ĐÚNG: chuyển giao NGAY. inheritIssuer tự vô hiệu hóa khóa cũ và đồng thời
-  // chuyển quyền thu hồi sang khóa mới — nó làm luôn việc của removeIssuer.
   run = await timed(async () =>
-    (await registry.connect(credverify).inheritIssuer(centerX.address, newKeyX.address)).wait());
-  recordTx(13, "inheritIssuer — chuyển giao danh tính sang khóa mới, khóa lộ bị vô hiệu tức thì",
-    run.result, "tên được chép sang, không nhân bản", run.ms);
-  recordEvents(registry, run.result, "inheritIssuer");
+    (await registry.connect(centerX).revokeCertificate(realId2)).wait());
+  recordTx(13, "revokeCertificate — kẻ tấn công thu hồi phá hoại một chứng chỉ THẬT",
+    run.result, "", run.ms);
+  const sabotaged = await registry.verifyCertificate(centerX.address, realHash2);
 
-  await tryBlock("khóa đã lộ cố cấp thêm chứng chỉ sau khi bị chuyển giao",
+  // THỨ TỰ ĐÚNG: gỡ quyền NGAY (tức thì), rồi đề xuất chuyển giao kèm mốc lộ.
+  run = await timed(async () =>
+    (await registry.connect(credverify).removeIssuer(centerX.address)).wait());
+  recordTx(14, "removeIssuer — chặn khóa lộ NGAY, không chờ", run.result, "hành động bảo vệ không qua độ trễ", run.ms);
+
+  await tryBlock("khóa đã lộ cố cấp thêm chứng chỉ sau khi bị gỡ quyền",
     "Giao dịch phải revert",
     () => registry.connect(centerX).issueCertificate(
       hre.ethers.keccak256(hre.ethers.toUtf8Bytes("them-mot-cai-nua")), attacker.address));
 
-  await tryBlock("khóa đã lộ cố thu hồi bậy một chứng chỉ hợp lệ",
+  run = await timed(async () =>
+    (await registry.connect(credverify).proposeInherit(centerX.address, newKeyX.address, compromisedSince)).wait());
+  recordTx(15, "proposeInherit — đề xuất CÔNG KHAI chuyển danh tính sang khóa mới, kèm mốc lộ khóa",
+    run.result, "phải chờ INHERIT_DELAY (tham số deploy; bằng chứng này dùng 48 giờ như production)", run.ms);
+  recordEvents(registry, run.result, "proposeInherit");
+
+  await tryBlock("executeInherit ngay sau khi đề xuất, chưa hết INHERIT_DELAY",
+    "Giao dịch phải revert",
+    () => registry.connect(credverify).executeInherit(centerX.address));
+
+  await hre.network.provider.send("evm_increaseTime", [Number(await registry.INHERIT_DELAY())]);
+  await hre.network.provider.send("evm_mine", []);
+  run = await timed(async () =>
+    (await registry.connect(credverify).executeInherit(centerX.address)).wait());
+  recordTx(16, "executeInherit — sau INHERIT_DELAY: khóa mới nhận danh tính, ghi compromisedAt cho khóa lộ",
+    run.result, "tên đi theo danh tính, không chép chuỗi", run.ms);
+  recordEvents(registry, run.result, "executeInherit");
+
+  const restored = await registry.verifyCertificate(centerX.address, realHash2);
+  const flagged = await registry.verifyCertificate(centerX.address, fakeHash);
+
+  await tryBlock("khóa đã lộ cố thu hồi bậy một chứng chỉ hợp lệ sau khi bị chuyển giao",
     "Giao dịch phải revert",
     () => registry.connect(centerX).revokeCertificate(fakeId));
 
   run = await timed(async () =>
     (await registry.connect(newKeyX).revokeCertificate(fakeId)).wait());
-  recordTx(15, "revokeCertificate — khóa kế nhiệm dọn bằng giả do khóa cũ đã cấp", run.result, "", run.ms);
+  recordTx(17, "revokeCertificate — khóa kế nhiệm dọn bằng giả do khóa cũ đã cấp", run.result, "", run.ms);
   const afterCleanup = await registry.verifyCertificate(centerX.address, fakeHash);
 
-  // BẪY VẬN HÀNH: gỡ quyền TRƯỚC thì chuyển giao bị chặn.
-  await (await registry.connect(credverify).addIssuer(attacker.address, "Trung tam tam thoi")).wait();
-  await (await registry.connect(credverify).removeIssuer(attacker.address)).wait();
-  await tryBlock("inheritIssuer sau khi đã gỡ quyền — BẪY THỨ TỰ THAO TÁC khi xử lý sự cố",
-    "Giao dịch phải revert (phải bật lại trước khi chuyển giao)",
-    () => registry.connect(credverify).inheritIssuer(attacker.address, student.address));
+  // Bất biến owner ≠ issuer qua chuyển quyền.
+  await tryBlock("transferOwnership cho một issuer đang hoạt động",
+    "Giao dịch phải revert",
+    () => registry.connect(credverify).transferOwnership(newKeyX.address));
+  await (await registry.connect(credverify).transferOwnership(recruiter.address)).wait();
+  await tryBlock("addIssuer cho chính owner đang được đề cử",
+    "Giao dịch phải revert",
+    () => registry.connect(credverify).addIssuer(recruiter.address, "Trung tam cua owner moi"));
+  await (await registry.connect(credverify).transferOwnership(credverify.address)).wait();
+  await (await registry.connect(credverify).acceptOwnership()).wait();
 
   // ---------- Bước 16: đo giới hạn khi mở rộng ----------
   console.log("Đang đo chi phí truy vấn theo số lượng đơn vị phát hành…");
   const scale = [];
   {
     const F2 = await hre.ethers.getContractFactory("CredentialRegistry");
-    const r2 = await F2.deploy(); await r2.waitForDeployment();
-    let made = 0;
+    const r2 = await F2.deploy(PROD_DELAY); await r2.waitForDeployment();
+    let made = 0, lastAdd = 0n;
     for (const N of [10, 50, 100]) {
       while (made < N) {
-        await r2.connect(credverify).addIssuer(hre.ethers.Wallet.createRandom().address, "TT-" + made);
+        lastAdd = (await (await r2.connect(credverify).addIssuer(
+          hre.ethers.Wallet.createRandom().address, "TT-" + String(made).padStart(4, "0"))).wait()).gasUsed;
         made++;
       }
       scale.push({
         n: N,
-        find: (await r2.findByHash.estimateGas(certHash)).toString(),
-        list: (await r2.listActiveIssuers.estimateGas()).toString(),
+        verify: (await r2.verifyCertificate.estimateGas(centerX.address, certHash)).toString(),
+        add: lastAdd.toString(),
       });
     }
   }
@@ -401,7 +436,8 @@ async function main() {
   md += "| Thời điểm | valid | status | Ý nghĩa |\n|---|---|---|---|\n";
   md += "| Sau khi cấp | " + afterIssue.valid + " | " + Number(afterIssue.status) + " | " + statusName[Number(afterIssue.status)] + " |\n";
   md += "| Sau khi thu hồi | " + afterRevoke.valid + " | " + Number(afterRevoke.status) + " | " + statusName[Number(afterRevoke.status)] + " |\n\n";
-  md += "Trạng thái chuyển một chiều `Issued -> Revoked`, **không có đường quay lại**. Hash tệp vẫn khớp sau khi ";
+  md += "Trạng thái chuyển một chiều `Issued -> Revoked`: thu hồi bởi một khóa hợp lệ **không có đường quay lại** ";
+  md += "(ngoại lệ duy nhất: lần thu hồi do một khóa đã bị tuyên bố lộ thực hiện bị vô hiệu — Mục 6.3). Hash tệp vẫn khớp sau khi ";
   md += "thu hồi nhưng `valid` trả về false — chứng minh trạng thái được kiểm tra độc lập với tính toàn vẹn của tệp. ";
   md += "Mục 7 có một dòng chứng minh việc **cấp lại** tệp đã thu hồi bị contract từ chối: đó là bất biến chống ";
   md += "\"nói hai lời\".\n\n";
@@ -416,13 +452,17 @@ async function main() {
   md += "mỗi đơn vị một không gian tên riêng bên trong một sổ chung, nên đòn này vô hại.\n\n";
 
   md += "### 6.3. Dọn hậu quả sau khi khóa cấp bị lộ\n\n";
-  md += "Bằng giả do khóa đã lộ cấp, sau khi khóa kế nhiệm dọn dẹp: `valid = " + afterCleanup.valid + "`, ";
-  md += "trạng thái " + statusName[Number(afterCleanup.status)] + ".\n\n";
-  md += "Xem ở mục 7 các thao tác: khóa đã bị chuyển giao **không cấp được nữa** và ";
-  md += "**không thu hồi được nữa**, còn `inheritIssuer` sau khi đã `removeIssuer` thì **bị chặn**. ";
-  md += "Dòng cuối là một **bẫy vận hành**, không phải lỗi thiết kế: phản xạ tự nhiên khi phát hiện sự cố là gỡ quyền ";
-  md += ", nhưng chính nước đi đó đóng cánh cửa chuyển giao. Quy trình đúng là chuyển giao NGAY — ";
-  md += "`inheritIssuer` đã tự vô hiệu hóa khóa cũ, nên nó làm luôn việc của `removeIssuer`.\n\n";
+  md += "Kẻ gian giữ khóa của Trung tâm X cấp một bằng giả (#12) và thu hồi phá hoại một chứng chỉ thật (#13). ";
+  md += "Owner gỡ quyền khóa lộ ngay (#14), đề xuất chuyển giao kèm mốc lộ `compromisedSince = " + compromisedSince + "` (#15), ";
+  md += "chờ INHERIT_DELAY rồi thực thi (#16).\n\n";
+  md += "| Bản ghi | Thời điểm | valid | status | revocationVoided | issuedAfterCompromise |\n|---|---|---|---|---|---|\n";
+  md += "| Chứng chỉ thật bị thu hồi phá hoại | sau #13 | " + sabotaged.valid + " | " + Number(sabotaged.status) + " | " + sabotaged.revocationVoided + " | " + sabotaged.issuedAfterCompromise + " |\n";
+  md += "| Chứng chỉ thật bị thu hồi phá hoại | sau #16 | " + restored.valid + " | " + Number(restored.status) + " | " + restored.revocationVoided + " | " + restored.issuedAfterCompromise + " |\n";
+  md += "| Bằng giả do khóa lộ cấp | sau #16 | " + flagged.valid + " | " + Number(flagged.status) + " | " + flagged.revocationVoided + " | " + flagged.issuedAfterCompromise + " |\n";
+  md += "| Bằng giả do khóa lộ cấp | sau #17 (khóa mới thu hồi) | " + afterCleanup.valid + " | " + Number(afterCleanup.status) + " | " + afterCleanup.revocationVoided + " | " + afterCleanup.issuedAfterCompromise + " |\n\n";
+  md += "Lần thu hồi phá hoại bị **vô hiệu tự động** trong hàm xác minh — không cần giao dịch nào cho từng chứng chỉ, ";
+  md += "và bản ghi gốc vẫn nằm nguyên trên chuỗi. Bằng giả được gắn cờ `issuedAfterCompromise` ngay khi chuyển giao xong, ";
+  md += "trước cả khi khóa mới kịp thu hồi nó. Xem `docs/AUDIT-V3.md`.\n\n";
 
   md += "## 7. Hành vi sai bị chặn\n\n";
   md += "| # | Hành vi | Kỳ vọng | Kết quả thực tế |\n|---|---|---|---|\n";
@@ -432,17 +472,22 @@ async function main() {
   md += "\n";
 
   md += "## 8. Đối chiếu thao tác giao diện với giao dịch trên chuỗi\n\n";
-  md += "| Thao tác trên giao diện `app/index.html` | Hàm contract | Thay đổi trạng thái |\n|---|---|---|\n";
+  md += "| Thao tác trên giao diện `app/` | Hàm contract | Thay đổi trạng thái |\n|---|---|---|\n";
   md += "| Quản trị → Công nhận | `addIssuer(address,string)` | `issuerStatus` None→Active, `nameHolder[keccak(tên)]`, event `IssuerAdded` |\n";
   md += "| Quản trị → Gỡ quyền / Bật lại | `removeIssuer` / `restoreIssuer` | `issuerStatus` Active↔Disabled |\n";
-  md += "| Quản trị → Chuyển giao danh tính | `inheritIssuer(address,address)` | khóa cũ→Disabled, khóa mới→Active, tên chuyển sang, `inheritedBy` |\n";
-  md += "| Quản trị → Chuyển/Nhận quyền owner | `transferOwnership` / `acceptOwnership` | `pendingOwner` rồi `owner` |\n";
+  md += "| Quản trị → Đề xuất / Thực thi / Hủy chuyển giao | `proposeInherit(old,new,compromisedSince)` → INHERIT_DELAY → `executeInherit(old)`; `cancelInherit(old)` | `inheritProposals[old]`; khi thực thi: khóa cũ→Disabled, khóa mới→Active, `inheritedBy`, `identityOf`, `latestKeyOf`, `compromisedAt` + `compromiseDeclaredAt` (nếu khóa lộ) |\n";
+  md += "| Quản trị → Chuyển/Hủy đề cử/Nhận quyền owner | `transferOwnership` / `cancelOwnershipTransfer` / `acceptOwnership` | `pendingOwner` rồi `owner` |\n";
   md += "| Cấp chứng chỉ → nút Cấp | `issueCertificate(bytes32,address)` | `certificates[certId].status` None→Issued, event `CertificateIssued` |\n";
   md += "| Tra cứu & thu hồi → nút Thu hồi | `revokeCertificate(bytes32)` | `status` Issued→Revoked, event `CertificateRevoked` |\n";
   md += "| Xác minh → có chọn đơn vị cấp | `verifyCertificate(address,bytes32)` | Chỉ đọc, **một** lời gọi view |\n";
-  md += "| Xác minh → không biết đơn vị cấp | `findByHash(bytes32)` rồi `verifyCertificate` | Chỉ đọc, quét O(n) theo số đơn vị |\n";
-  md += "| Chứng chỉ của tôi | event `CertificateIssued` lọc theo `holder`, rồi `getCertificate` | Chỉ đọc |\n";
-  md += "| Đơn vị phát hành → danh bạ | `listActiveIssuers()` | Chỉ đọc |\n";
+  md += "| Xác minh → gõ tên in trên chứng chỉ (không cần event) | `issuerByName(string)` | Chỉ đọc trạng thái |\n";
+  md += "| Xác minh → yêu cầu ứng viên chứng minh chủ ví | — (chữ ký `personal_sign`, 0 gas) | Không ghi gì lên chuỗi |\n";
+  md += "| Xác minh → **bắt buộc** chọn đơn vị ghi trên chứng chỉ | — | Danh sách chọn gồm cả đơn vị đã ngừng, dựng từ event |\n";
+  md += "| Xác minh → có biên nhận lô | `verifyInBatch(issuer, root, certHash, holder, salt, proof)` | Chỉ đọc, Merkle proof kiểm **trên chuỗi** |\n";
+  md += "| (script) Cấp theo lô — `scripts/issue-batch.js` | `publishBatch(bytes32,uint32)` | `batches[batchId]`, event `BatchPublished` |\n";
+  md += "| (script/Etherscan) Thu hồi trong lô | `revokeLeaf` / `revokeBatch` | `leafRevocation` / `batches[batchId].revokedAt, revokedBy` |\n";
+  md += "| Chứng chỉ của tôi | event `CertificateIssued` lọc theo `holder`, rồi `verifyCertificate` (trạng thái hiệu lực) | Chỉ đọc |\n";
+  md += "| Đơn vị phát hành → danh bạ | event `IssuerAdded/Removed/Restored/Inherited`, đối chiếu `activeIssuerCount()` | Chỉ đọc |\n";
   md += "| Đơn vị phát hành → nhật ký quản trị | event `IssuerAdded/Removed/Restored/Inherited` | Chỉ đọc |\n";
   md += "| Xác minh, Chứng chỉ của tôi, Đơn vị phát hành | qua `JsonRpcProvider` | **không cần ví** |\n\n";
   md += "`certId` **không** do người dùng nhập. Giao diện tính tại chỗ bằng `solidityPackedKeccak256([\"address\",\"bytes32\"], [ví, hash])`, ";
@@ -455,7 +500,7 @@ async function main() {
   md += "| Cải tiến ở giao diện | Vì sao contract không làm được |\n|---|---|\n";
   md += "| **Cảnh báo tuổi khóa cấp** — hiện đơn vị được công nhận từ bao giờ, cách thời điểm cấp bao lâu | Trên chuỗi, \"đơn vị hợp pháp vừa được công nhận\" và \"ví giả được thêm 3 phút trước\" giống hệt nhau từng byte. Không `require` nào tách được hai cái đó; một con người có ngữ cảnh thì tách được ngay |\n";
   md += "| **Cảnh báo tên gần giống** — chuẩn hóa NFKC + gộp khoảng trắng + bỏ dấu rồi so | `nameHolder` chặn trùng tên y hệt theo byte; chuẩn hóa Unicode trong Solidity thì không có giá hợp lý |\n";
-  md += "| **Đồng hồ đo đời khóa** — hiện \"đời thứ N/8\" | Contract chỉ biết chặn ở hop thứ 9; nó không có chỗ nào để cảnh báo trước |\n\n";
+  md += "| **Ghi chú xoay khóa** — phân biệt \"đơn vị đã xoay sang khóa mới\" với \"đơn vị bị gỡ\" | Contract trả `issuerState = Disabled` cho cả hai; giao diện đọc thêm `currentKeyOf` để nói đúng chuyện gì đã xảy ra |\n\n";
   md += "**Giới hạn phải nói rõ:** mọi cảnh báo trên chỉ bảo vệ người đang dùng đúng trang này. Kẻ tấn công dựng ";
   md += "trang riêng, hoặc gọi thẳng contract qua Etherscan. Đây là lớp phòng vệ chống **nhầm lẫn**, không phải lớp ";
   md += "phòng vệ chống **tấn công**.\n\n";
@@ -511,15 +556,21 @@ async function main() {
   md += "| 1. Công nhận đơn vị phát hành | Chỉ owner công nhận được; một địa chỉ ứng với đúng một danh tính |\n";
   md += "| 1b. Tên là duy nhất | Chặn đường lạm quyền **im lặng**: hai ví cùng một tên |\n";
   md += "| 2. Cấp chứng chỉ | Happy path và mọi cách gọi sai đều bị chặn, kể cả từ owner |\n";
-  md += "| 3. Không gian tên riêng | Đòn đăng ký trước bị vô hiệu; `findByHash` trả về đúng nhiều bản ghi |\n";
-  md += "| 4. Thu hồi | Bất biến **thu hồi là vĩnh viễn**; owner không thu hồi được |\n";
+  md += "| 3. Không gian tên riêng | Đòn đăng ký trước bị vô hiệu; mỗi đơn vị một bản ghi độc lập, tra theo đơn vị |\n";
+  md += "| 4. Thu hồi | Thu hồi bởi khóa hợp lệ là vĩnh viễn; owner không thu hồi được |\n";
   md += "| 5. Xoay khóa khi bị lộ | Chuyển giao chép tên, khóa cũ tê liệt hoàn toàn |\n";
   md += "| 6. Xác minh | Không bao giờ bị chặn, kể cả khi đơn vị cấp đã bị vô hiệu hóa |\n";
   md += "| 7. Khả kiến | Đơn vị thêm lén hiện ngay trong danh sách |\n";
   md += "| 8. Chuyển quyền owner | Hai bước, gõ nhầm không mất quyền vĩnh viễn |\n";
-  md += "| 9. Ranh giới quyền owner | Liệt kê tường minh 8 hàm ghi; không hàm nào của owner chạm vào `certificates` |\n";
+  md += "| 9. Ranh giới quyền owner | Liệt kê tường minh 14 hàm ghi; không hàm nào của owner chạm vào `certificates` |\n";
   md += "| 10. Dọn dẹp sau sự cố | Ghim **thứ tự thao tác đúng** và bẫy vận hành đi kèm |\n";
-  md += "| XSS qua chuỗi revert (frontend) | Dữ liệu do kẻ tấn công kiểm soát tới được client |\n\n";
+  md += "| A–E | Owner ≠ issuer qua chuyển quyền; xoay khóa từ Disabled; danh tính O(1); cấp/thu hồi theo lô; issuer multisig |\n";
+  md += "| PoC, S1–S7 | Ba PoC của bản kiểm toán (đảo kỳ vọng); vô hiệu thu hồi do khóa lộ; cờ `issuedAfterCompromise`; độ trễ chuyển giao; tên dạng chuẩn; hủy đề cử owner |\n";
+  md += "| W, D, C, E, G | Danh sách cho phép tên tiếng Việt (khớp `scripts/lib/name.js` trên 300 tên ngẫu nhiên); `INHERIT_DELAY` của bộ test; mốc công bố lộ; `effectiveStatus`; PoC lượt 2 (G-03, G-05 ghim rủi ro; G-04, G-06 đã sửa) |\n";
+  md += "| V34-01 | `revokeLeaf` nhận `inner`, tự băm thành lá: nút trong ở mọi tầng (kể cả root) và cách gọi cũ (gửi lá) đều bị từ chối; `leafInnerOf` ≡ ngoài chuỗi; thống kê kiểm toán theo đơn vị của giao diện ≡ contract |\n";
+  md += "| V341-01 | `INHERIT_DELAY` là tham số constructor trong [1 phút, 7 ngày], bất biến; `scripts/lib/delay.js` mặc định 48 giờ, từ chối < 24 giờ trên mạng không phải local/testnet; deploy 48 giờ: thực thi sớm bị chặn, đủ hạn thì chạy |\n";
+  md += "| XSS qua chuỗi lỗi từ RPC / revert (frontend) | Chuỗi lỗi do kẻ tấn công (RPC độc hại hoặc revert) kiểm soát tới được client, nhưng `reasonOf()`/`esc()` THẬT của giao diện không để nó tới chỗ hiển thị; mọi chỗ dùng `reasonOf()` trong `app.js` đều qua `bannerText`/`esc`/`alert` |\n";
+  md += "| CSP/SRI và quy tắc chung (frontend) | CSP khớp `RPC_URLS`, không script nội tuyến, SRI phát hành bắt được `app.js` bị sửa; chuẩn hóa tên và `certId` của giao diện ≡ script/contract |\n\n";
   md += "Trọng tâm của bộ kiểm thử là **hành vi sai bị chặn** và **kịch bản phục hồi sự cố**, ";
   md += "không chỉ chứng minh luồng thuận chạy được.\n\n";
 
@@ -527,9 +578,10 @@ async function main() {
   md += "Ba test dưới đây **pass** để ghim một rủi ro còn lại, không phải để tuyên bố đã xử lý. ";
   md += "Nếu một phiên bản sau vô tình vá chúng, test sẽ vỡ và buộc người sửa phải đọc lại lý do.\n\n";
   md += "| Test | Khẳng định điều gì |\n|---|---|\n";
-  md += "| *GIỚI HẠN ĐÃ BIẾT: tên GẦN GIỐNG vẫn đăng ký được* | `nameHolder` so khớp theo byte, không chặn được chữ Kirin trông giống Latin hay khoảng trắng thừa |\n";
-  md += "| *RỦI RO CÒN LẠI: owner cướp được danh tính một trung tâm đang hoạt động* | `inheritIssuer` là quyền nguy hiểm nhất của owner; cơ chế bù duy nhất là tính công khai của event |\n";
-  md += "| *BẪY VẬN HÀNH: gọi removeIssuer TRƯỚC thì inheritIssuer revert* | Thứ tự thao tác khi xử lý sự cố quyết định việc dọn dẹp có khả thi hay không |\n\n";
+  md += "| *GIỚI HẠN ĐÃ BIẾT: tên khác chữ hoa/thường vẫn đăng ký được* | `nameHolder` so khớp theo byte. Danh sách cho phép chặn chữ Kirin/Hy Lạp, ký tự vô hình, NFD, dấu chấm và ký tự đặc biệt; còn lại khác chữ hoa/thường hoặc l/I, 0/O — giao diện cảnh báo |\n";
+  md += "| *RỦI RO CHẤP NHẬN (V32-01): owner qua mốc lộ khóa ảnh hưởng hiệu lực chứng chỉ trong 30 ngày* | Hồi sinh được một lần thu hồi hợp pháp và gắn cờ bằng thật cấp sau mốc lộ — công khai, sau INHERIT_DELAY. Contract ghi và trả thời điểm công bố để người xác minh thấy mốc bị lùi bao xa (test G-03) |\n";
+  md += "| *RỦI RO CÒN LẠI: owner cướp được danh tính một trung tâm đang hoạt động* | Chuyển giao là quyền nguy hiểm nhất của owner; contract buộc nó qua đề xuất công khai + INHERIT_DELAY chờ (48 giờ ở production), nhưng owner một mình vẫn làm được — ví đa chữ ký là future work |\n";
+  md += "| *CHỦ ĐÍCH: lô của khóa bị gỡ (không lộ) VẪN hợp lệ* | Gỡ quyền không viết lại quá khứ — áp dụng cho cả đường cấp theo lô |\n\n";
 
   md += "### 10.3. Đối chiếu test với lớp phòng thủ trong contract\n\n";
   md += "| Lớp phòng thủ | Test xác nhận |\n|---|---|\n";
@@ -542,9 +594,17 @@ async function main() {
   md += "| `require(holder != address(0))` | *BỊ CHẶN: học viên là địa chỉ 0* |\n";
   md += "| `require(status == None)` — chặn trùng VÀ chặn cấp lại sau thu hồi | *BỊ CHẶN: cấp trùng*, *BẤT BIẾN: thu hồi là VĨNH VIỄN* |\n";
   md += "| `require(issuerStatus[msg.sender] == Active)` trong `revokeCertificate` | *Khóa đã bị gỡ quyền mất luôn quyền thu hồi*, *Knhiệm đã bị gỡ cũng mất quyền* |\n";
-  md += "| `_inheritsFrom` — chỉ khóa đã cấp hoặc người kế nhiệm | *BỊ CHẶN: issuer khác không thu hồi được*, *chuỗi kế nhiệm hai bậc* |\n";
+  md += "| `_requireCanRevoke` — cùng `identityOf`, đang Active | *BỊ CHẶN: issuer khác không thu hồi được*, *chuỗi kế nhiệm hai bậc*, *9 lần chuyển giao* |\n";
+  md += "| `transferOwnership`/`acceptOwnership` từ chối issuer; `addIssuer`/`proposeInherit`/`executeInherit` từ chối `pendingOwner` | *A. Bất biến owner ≠ issuer* (7 test), *S3. kiểm lại lúc thực thi* |\n";
+  md += "| `INHERIT_DELAY`, `PROPOSAL_TTL` — chuyển giao qua độ trễ, đề xuất có hạn | *S3. Độ trễ chuyển giao danh tính* |\n";
+  md += "| `compromisedAt` + `_voided` — thu hồi do khóa lộ bị vô hiệu; cờ `issuedAfterCompromise`; `MAX_COMPROMISE_LOOKBACK` | *PoC F-01, F-03*, *S1*, *S2* |\n";
+  md += "| `_requireCanonicalName` — tên dạng chuẩn | *S7. BỊ CHẶN: tên không ở dạng chuẩn* (6 test) |\n";
+  md += "| `RECOVERY_WINDOW` — quá 7 ngày sau khi gỡ thì không bật lại/chuyển giao được | *BẤT BIẾN: quá RECOVERY_WINDOW sau khi gỡ, danh tính ĐÓNG BĂNG* |\n";
+  md += "| `publishBatch` — `onlyActiveIssuer`, root ≠ 0, lô không rỗng, không trùng | *D2. Cấp theo lô — các trường hợp bị chặn* |\n";
+  md += "| `revokeLeaf` — kèm Merkle proof, khớp root, lô chưa thu hồi | *D3. Thu hồi trong lô* |\n";
+  md += "| `revokeLeaf` nhận `inner`, lá = keccak(inner) — chỉ lá thật của cây thu hồi được (V34-01) | *V34-01. revokeLeaf chỉ thu hồi được LÁ THẬT* (6 test), *BẤT BIẾN: nút trong của cây không dùng làm lá được* |\n";
   md += "| `acceptOwnership` hai bước | *BỊ CHẶN: người không được chỉ định không nhận được quyền* |\n\n";
-  md += "Mọi `require` và `modifier` trong contract đều có ít nhất một test tương ứng.\n\n";
+  md += "Mọi điều kiện revert (custom error) và `modifier` trong contract đều có ít nhất một test tương ứng.\n\n";
 
   md += "### 10.4. Độ phủ kiểm thử (coverage)\n\n";
   const cov = readCoverage();
@@ -560,96 +620,55 @@ async function main() {
         r.branch.toFixed(2) + " | " + r.funcs.toFixed(2) + " |\n";
     });
     md += "\n";
-    md += "`contracts/attack/EvilRegistry.sol` có độ phủ thấp là **đúng như thiết kế**: đó là ";
-    md += "contract tấn công dựng làm bằng chứng cho M7, chỉ một hàm của nó được gọi trong kịch bản ";
-    md += "XSS. Nó không thuộc hệ thống và không nên tính vào độ phủ của sản phẩm.\n\n";
+    md += "`contracts/test/MultiSigIssuerMock.sol` là ví mẫu chỉ dùng trong test; `contracts/legacy/CredentialRegistryV2.sol` chỉ dùng để đo gas so sánh. ";
+    md += "Nhánh duy nhất chưa phủ trong `CredentialRegistry.sol` là kiểm tra thừa trong `acceptOwnership` — phòng thủ chiều sâu, không đến được với mã hiện tại (xem `docs/AUDIT-V3.md`).\n\n";
   }
 
   md += "## 11. Phân tích tĩnh — Slither\n\n";
   md += "Lưu ý: toàn bộ mục này là hằng số trong script, phải cập nhật tay sau mỗi lần chạy Slither.\n\n";
   md += "| Hạng mục | Giá trị |\n|---|---|\n";
   md += "| Công cụ | Slither `slither-analyzer` 0.11.6 |\n";
-  md += "| Lệnh | `slither . --filter-paths \"contracts/attack\" --exclude-dependencies` |\n";
+  md += "| Lệnh | `slither . --filter-paths \"contracts/attack|contracts/test|contracts/legacy|node_modules\" --exclude-dependencies` |\n";
   md += "| Log gốc | `docs/slither-report.txt` |\n";
   md += "| Phạm vi | `contracts/CredentialRegistry.sol`, 102 detector |\n";
-  md += "| Kết quả | **2 phát hiện — 0 High, 0 Medium, 2 Low, 0 Optimization** |\n\n";
-  md += "`contracts/attack/EvilRegistry.sol` bị loại khỏi phạm vi quét: đó là contract **tấn công** dựng làm ";
-  md += "bằng chứng cho M7, không phải một phần của hệ thống.\n\n";
+  md += "| Kết quả | **10 phát hiện — 0 High, 0 Medium, 3 Low (`timestamp`), 7 Informational (`assembly`, `cyclomatic-complexity`, 4 × `too-many-digits`, `naming-convention`)** |\n\n";
+  md += "`contracts/attack/` (dành cho contract đối chứng/tấn công, không thuộc hệ thống), `contracts/test/` và `contracts/legacy/` bị loại khỏi phạm vi quét.\n\n";
 
   md += "### 11.1. Bảng phát hiện\n\n";
-  md += "| # | Detector | Mức | Vị trí | Kết luận |\n|---|---|---|---|---|\n";
-  md += "| 1 | `timestamp` | Low | `issueCertificate` | **False positive** |\n";
-  md += "| 2 | `timestamp` | Low | `revokeCertificate` | **False positive** |\n\n";
+  md += "| # | Detector | Mức | Vị trí | So sánh | Kết luận |\n|---|---|---|---|---|---|\n";
+  md += "| 1 | `timestamp` | Low | `proposeInherit` | mốc lộ khóa ≤ bây giờ và ≥ bây giờ − 30 ngày | **So sánh thời gian có chủ đích — chấp nhận** |\n";
+  md += "| 2 | `timestamp` | Low | `executeInherit` | bây giờ ≥ eta (INHERIT_DELAY) và ≤ eta + 7 ngày | **So sánh thời gian có chủ đích — chấp nhận** |\n";
+  md += "| 3 | `timestamp` | Low | `_requireInRecoveryWindow` | bây giờ ≤ lúc gỡ + 7 ngày | **So sánh thời gian có chủ đích — chấp nhận** |\n";
+  md += "| 4 | `assembly` | Informational | `_requireCanonicalName` | — | **Có chủ đích**: vòng kiểm tên theo danh sách cho phép, chỉ đọc calldata; test W phủ đủ 134 chữ, mọi biên và chuỗi UTF-8 cụt |\n";
+  md += "| 5 | `cyclomatic-complexity` | Informational | `_requireCanonicalName` | 16 nhánh | **Có chủ đích**: mỗi nhánh là một dải byte UTF-8 của chữ tiếng Việt |\n";
+  md += "| 6–9 | `too-many-digits` | Informational | hằng `_ASCII_OK`, `_C4_OK`, `_C5_OK`, `_C6_OK` | — | **Có chủ đích**: mặt nạ bit của danh sách cho phép; chú thích ngay trên từng hằng |\n";
+  md += "| 10 | `naming-convention` | Informational | `INHERIT_DELAY` (immutable) | — | **Có chủ đích**: giữ tên viết hoa như một hằng cấu hình; getter `INHERIT_DELAY()` là tên giao diện và script dùng |\n\n";
 
-  md += "### 11.2. Cả hai phát hiện đều là false positive\n\n";
-  md += "Slither báo hai hàm *\"uses timestamp for comparisons\"*. Các so sánh bị liệt kê là:\n\n";
-  md += "```\n";
-  md += "- require(certificates[certId].status == Status.None, \"...already exists...\")\n";
-  md += "- require(cert.status == Status.Issued, \"...not in Issued state\")\n";
-  md += "- require(_inheritsFrom(cert.issuer, msg.sender), \"...not the issuing key or its successor\")\n";
-  md += "```\n\n";
-  md += "**Không so sánh nào liên quan tới thời gian.** Hai dòng đầu so sánh giá trị `enum Status`; ";
-  md += "dòng thứ ba kiểm một giá trị `bool` trả về từ hàm `view` `_inheritsFrom`, vốn chỉ đi theo chuỗi ";
-  md += "`inheritedBy` và so sánh `address`. ";
-  md += "Nguyên nhân báo nhầm: detector `timestamp` hoạt động ở **mức hàm**. Nó đánh dấu bất kỳ hàm nào có ĐỌC ";
-  md += "`block.timestamp`, rồi liệt kê TOÀN BỘ phép so sánh trong hàm đó là \"dangerous comparisons\", không phân ";
-  md += "tích xem giá trị timestamp có thật sự chảy vào phép so sánh hay không. Trong hai hàm này ";
-  md += "`block.timestamp` chỉ được **ghi** vào `issuedAt` / `revokedAt` và phát ra trong event — ";
-  md += "không có nhánh logic nào rẽ theo nó.\n\n";
-  md += "Người đào block làm lệch được timestamp vài giây tới vài chục giây, nhưng giá trị này chỉ dùng để ghi ";
-  md += "**ngày cấp** và **ngày thu hồi** phục vụ hiển thị và kiểm toán. Không có phần thưởng kinh tế nào để thao ";
-  md += "túng, và sai lệch vài giây không đổi ý nghĩa nghiệp vụ của một ngày cấp.\n\n";
-  md += "**Kết luận: không sửa code.** Bỏ `issuedAt`/`revokedAt` để làm im cảnh báo sẽ mất dữ liệu kiểm toán cần ";
-  md += "thiết — chính là dữ liệu trả lời câu *\"lúc tuyển tháng 3, tấm bằng này còn hiệu lực không?\"* — mà không ";
-  md += "đổi lại được lợi ích an toàn nào.\n\n";
-
+  md += "### 11.2. Vì sao chấp nhận\n\n";
+  md += "Cả ba là ranh giới thời gian **thiết kế có chủ đích**: cửa sổ khôi phục 7 ngày, độ trễ chuyển giao (tham số deploy: 48 giờ production, có thể ngắn hơn ở bản demo), hạn ";
+  md += "đề xuất 7 ngày và giới hạn lùi mốc lộ khóa 30 ngày. Người đề xuất block chỉ lệch được timestamp vài giây — ";
+  md += "không đáng kể so với các cửa sổ tính bằng giờ và ngày ở production (riêng độ trễ 1 phút nếu bản demo chọn thì vài giây là đáng kể, ";
+  md += "nhưng đó chỉ là cấu hình demo), và lệch theo chiều nào cũng chỉ dời ranh giới vài giây. ";
+  md += "**Không sửa.**\n\n";
   md += "## 11b. Giới hạn khi mở rộng — số đo\n\n";
-  md += "`findByHash` và `listActiveIssuers` duyệt toàn bộ tập đơn vị phát hành. Cả hai là hàm `view` nên **chi phí ";
-  md += "gas bằng 0** với người gọi, nhưng RPC công khai đặt trần cho `eth_call`, nên vẫn có một giới hạn quy mô thật.\n\n";
-  md += "| Số đơn vị phát hành | `findByHash` (gas) | `listActiveIssuers` (gas) |\n|---|---|---|\n";
-  scale.forEach((r) => { md += "| " + r.n + " | " + r.find + " | " + r.list + " |\n"; });
+  md += "V2 có ba hàm `view` duyệt toàn bộ danh bạ (`findByHash`, `listActiveIssuers`, `knownIssuers`). Người gọi trả 0 gas, ";
+  md += "nhưng RPC từ chối lời gọi vượt trần gas của `eth_call`. Đo trên bản V2: `listActiveIssuers` — hàm trả kèm **tên** — ";
+  md += "tốn ~15.600 gas/đơn vị, vỡ ở **~3.200 đơn vị** với trần 50 triệu gas và **~630** với trần 10 triệu. Số liệu đầy đủ: `docs/SCALE-NAMES.md` ";
+  md += "(`npx hardhat run scripts/scale-names.js`).\n\n";
+  md += "**V3 không có ba hàm này.** Mọi thao tác trên chuỗi là O(1) theo số đơn vị — bảng dưới đo trên chính contract V3:\n\n";
+  md += "| Số đơn vị phát hành | `verifyCertificate` (gas) | `addIssuer` đơn vị thứ N (gas) |\n|---|---|---|\n";
+  scale.forEach((r) => { md += "| " + r.n + " | " + r.verify + " | " + r.add + " |\n"; });
   md += "\n";
-  if (scale.length >= 2) {
-    const d = scale[scale.length - 1], c0 = scale[0];
-    const perFind = (Number(d.find) - Number(c0.find)) / (d.n - c0.n);
-    const perList = (Number(d.list) - Number(c0.list)) / (d.n - c0.n);
-    md += "Chi phí tăng **tuyến tính**: khoảng " + perFind.toFixed(0) + " gas mỗi đơn vị với `findByHash` và " +
-      perList.toFixed(0) + " gas mỗi đơn vị với `listActiveIssuers`. ";
-    md += "Với trần `eth_call` phổ biến 10M–50M gas, trần thực tế rơi vào khoảng **" +
-      Math.floor(10e6 / perList) + " – " + Math.floor(50e6 / perFind) + " đơn vị phát hành**.\n\n";
-  }
-  md += "Con số này **không phải giả định xa vời**: Việt Nam có thể có vài nghìn trung tâm đào tạo.\n\n";
-  md += "Ba cách xử lý, theo thứ tự nên làm:\n\n";
-  md += "1. **Hỏi đúng câu.** `findByHash` chỉ cần khi verifier KHÔNG biết đơn vị nào cấp. Giao diện hỏi \"tấm bằng ";
-  md += "này của trung tâm nào?\" thì đường đi là `certIdOf` tính tại client rồi `getCertificate` — **O(1)**, không ";
-  md += "chạm vòng lặp. Đường O(n) lùi về vai trò dự phòng. Đây là cách xử lý **không tốn một dòng contract nào**.\n";
-  md += "2. **Indexer.** Bản triển khai thật nên đẩy phần tìm kiếm sang một indexer (ví dụ The Graph) đọc event, ";
-  md += "thay vì duyệt storage trong hàm `view`.\n";
-  md += "3. **Phân trang.** Thêm `listIssuers(offset, limit)` nếu vẫn muốn giữ mọi thứ on-chain. Cố ý **không** làm ";
-  md += "trong MVP: nó thêm bề mặt cho một bài toán mà cách 1 đã xử lý gần hết.\n\n";
-  md += "Script sinh lại bảng này ở quy mô lớn hơn: `npx hardhat run scripts/scale-probe.js`.\n\n";
+  md += "Danh bạ trên giao diện dựng từ event (một lần quét cho mọi loại event, từ `DEPLOY_BLOCK`), rồi **đối chiếu với `activeIssuerCount()`** ";
+  md += "trên chuỗi — lệch thì giao diện báo đỏ. Chi phí chuyển sang số lời gọi `eth_getLogs`: tỉ lệ với **tuổi contract tính bằng block**, ";
+  md += "không tỉ lệ với số đơn vị. Bản triển khai thật nên dùng indexer (ví dụ The Graph) đọc cùng các event này.\n\n";
+  md += "Người xác minh **phải** chọn đơn vị ghi trên chứng chỉ (tên đơn vị in trên chính tệp PDF) — đường đi là `verifyCertificate(đơn vị, hash)`, một lời gọi.\n\n";
 
   md += "## 12. Ảnh chụp màn hình\n\n";
-  md += "Chụp từ một phiên chạy thật với MetaMask trên mạng Hardhat local (chainId 31337). ";
-  md += "Đường dẫn: `picture/screenshots/`.\n\n";
-  md += "| # | Ảnh | Chứng minh điều gì |\n|---|---|---|\n";
-  md += "| 1 | `01-cong-nhan-trung-tam-A.png` | Owner công nhận đơn vị phát hành, nhật ký hiện tx hash + block + gas |\n";
-  md += "| 2 | `02-cong-nhan-trung-tam-B.png` | Đơn vị thứ hai — điều kiện để minh họa **không gian tên riêng** ở Mục 6.2 |\n";
-  md += "| 3 | `03-hop-xac-nhan-ten-gan-giong.png` | Hộp xác nhận hiện **TRƯỚC KHI** gửi giao dịch, cho tên khác byte nhưng trông giống |\n";
-  md += "| 4 | `04-doi-vi.png` | Đổi ví trong MetaMask → chip Vai trò bị xóa, nhật ký ghi *Ví đổi tài khoản* |\n";
-  md += "| 5 | `05-cap-chung-chi-thanh-cong.png` | Cấp chứng chỉ thành công; khung *Mã bản ghi* hiện `certId` **tính tại client**, không nhập tay |\n";
-  md += "| 6 | `06-xac-minh-hop-le.jpeg` | Nộp đúng tệp gốc → hợp lệ, kèm **tên đơn vị cấp** và thời điểm đơn vị được công nhận |\n";
-  md += "| 7 | `07-cap-chung-chi-bi-chan.jpeg` | Ví chưa được công nhận cố cấp → revert `caller is not an active issuer`, chuỗi lý do lấy **thẳng từ `require`** |\n";
-  md += "| 8 | `08-thu-hoi-chung-chi.jpeg` | Thu hồi thành công, kèm cảnh báo *thu hồi là VĨNH VIỄN* |\n";
-  md += "| 9 | `09-xac-minh-da-thu-hoi.jpeg` | Xác minh lại bằng **đúng tệp gốc**: hash vẫn khớp nhưng **không hợp lệ**, kèm ngày thu hồi |\n";
-  md += "| 10 | `10-danh-ba-canh-bao-ten.jpeg` | Tab Đơn vị phát hành: danh bạ + nhật ký quản trị + **băng đỏ cảnh báo tên gần giống** |\n";
-  md += "| 11 | `11-chung-chi-cua-toi.jpeg` | Màn hình học viên, dựng từ event trên chuỗi, **không cần ví** |\n\n";
-  md += "**Cặp ảnh 6 và 9 là bằng chứng trực quan**: cùng một tệp, cùng một hash, hai kết quả ";
-  md += "khác nhau trước và sau khi thu hồi. Nó cho thấy trạng thái được kiểm tra **độc lập** với tính toàn ";
-  md += "vẹn của tệp — state machine một chiều ở Mục 6.1.\n\n";
-  md += "**Ảnh 3, 4 và 10** là bằng chứng cho Mục 8b — những việc giao diện làm mà contract không làm được. ";
-  md += "**Ảnh 7** đáng chú ý vì nó bắt được hai thứ trong một khung hình: giao dịch bị chặn với đúng chuỗi ";
-  md += "revert của contract, VÀ dòng *Ví đổi tài khoản* trong nhật ký ngay phía trên.\n\n";
+  md += "Bộ 11 ảnh cũ chụp **giao diện V2** (còn mục \"Nâng cao\", ô \"tra tất cả đơn vị\", chuỗi revert thay vì custom error) ";
+  md += "nên đã được gỡ khỏi repo vì không còn khớp giao diện V3. Ảnh mới sẽ chụp trên bản triển khai Sepolia ";
+  md += "(README mục 12.0) và đặt ở `picture/screenshots/`. Trong lúc chờ, bằng chứng giao diện là các kịch bản e2e chạy thật ";
+  md += "trên Chromium ghi ở `docs/AUDIT-V3.md`.\n\n";
 
   md += "## 13. So sánh với baseline tập trung (Proposal mục 2.1 và mục 6)\n\n";
   md += "### 13.1. So sánh định lượng — thời gian xác minh một chứng chỉ\n\n";

@@ -4,3 +4,5 @@ artifacts
 .env
 coverage
 coverage.json
+receipts/
+demo-issuer.key

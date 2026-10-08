@@ -1,54 +1,57 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
+const { load, SRC } = require("./uiSource");
 
+// Dùng ĐÚNG hàm reasonOf() và esc() của giao diện (đọc từ app/app.js), không chép tay.
+// Địa chỉ hợp đồng được ghi cứng trong app.js, nhưng chuỗi lỗi vẫn đến từ RPC: một RPC độc hại trả
+// được BẤT KỲ chuỗi nào. Các test dựng thẳng đối tượng lỗi như RPC trả về, không cần contract nào.
+const ui = load(["ERR_VI", "ABI", "IFACE", "decodeRevertName", "reasonOf", "esc"], ethers);
 
-describe("XSS qua chuỗi revert của contract", function () {
+describe("XSS qua chuỗi lỗi từ RPC / revert", function () {
   const PAYLOAD = "<img src=x onerror=\"alert('XSS')\">";
 
-  it("chuỗi revert do kẻ tấn công chọn tới được client nguyên vẹn", async function () {
-    const Evil = await ethers.getContractFactory("EvilRegistry");
-    const evil = await Evil.deploy();
-    await evil.waitForDeployment();
-
-    let captured = null;
-    try {
-      await evil.issueCertificate(ethers.ZeroHash, ethers.ZeroHash, ethers.ZeroAddress);
-    } catch (err) {
-      // Sao chép NGUYÊN VĂN hàm reasonOf() trong app/index.html
-      captured = err?.reason || err?.shortMessage || err?.info?.error?.message
-                 || err?.message || "Không rõ nguyên nhân";
-    }
-
-    // Tùy môi trường mà payload nằm ở err.reason (MetaMask + node JSON-RPC)
-    // hay err.message (EVM in-process của Hardhat). Điều quan trọng không đổi:
-    // chuỗi do KẺ TẤN CÔNG chọn đi tới client nguyên vẹn, rồi được ghép vào innerHTML.
-    expect(captured).to.include(PAYLOAD);
-    expect(captured).to.include("<img");
-    expect(captured).to.include("onerror");
+  it("revert Error(string) mang payload: tới được client, nhưng reasonOf() thật chỉ hiện tên lỗi", () => {
+    const data = ethers.id("Error(string)").slice(0, 10) +
+      ethers.AbiCoder.defaultAbiCoder().encode(["string"], [PAYLOAD]).slice(2);
+    const err = ethers.makeError("execution reverted", "CALL_EXCEPTION",
+      { action: "estimateGas", data, reason: PAYLOAD, transaction: { to: null, data: "0x" }, invocation: null, revert: null });
+    // Mối đe dọa có thật: chuỗi do kẻ tấn công chọn đi tới client nguyên vẹn trong đối tượng lỗi.
+    expect(err.reason).to.equal(PAYLOAD);
+    const shown = ui.reasonOf(err);
+    expect(shown).to.equal("Contract từ chối (Error)");
+    expect(shown).to.not.include("<img");
   });
 
-  it("Deploy contract giả", async function () {
-    const Evil = await ethers.getContractFactory("EvilRegistry");
-    const evil = await Evil.deploy();
-    await evil.waitForDeployment();
-    const addr = await evil.getAddress();
-
-    // getCode(): địa chỉ này CÓ mã -> qua được kiểm tra FE-04
-    expect(await ethers.provider.getCode(addr)).to.not.equal("0x");
-
-    // chainId: contract giả nằm trên cùng chain với contract thật -> qua được kiểm tra FE-03
-    const net = await ethers.provider.getNetwork();
-    expect(net.chainId).to.equal(31337n);
-
-    // Và nó trả "hợp lệ" cho một tệp chưa từng được cấp.
-    const [valid] = await evil.verifyCertificate(ethers.ZeroHash, ethers.ZeroHash);
-    expect(valid).to.equal(true);
+  it("RPC độc hại trả lỗi JSON-RPC chứa payload: reasonOf() trả nguyên chuỗi — lớp chặn là chỗ hiển thị", () => {
+    // Địa chỉ hợp đồng ghi cứng KHÔNG chặn được đường này: thông điệp lỗi do RPC tự soạn.
+    const shown = ui.reasonOf({ code: -32000, message: PAYLOAD });
+    expect(shown).to.equal(PAYLOAD);
+    expect(ui.esc(shown)).to.not.include("<img");
   });
 
-  it("esc() vô hiệu hóa payload", async function () {
-    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-    const safe = esc(PAYLOAD);
+  it("mọi nơi dùng reasonOf() trong app.js đều đi qua bannerText / esc / alert (không chèn thẳng vào innerHTML)", () => {
+    const lines = SRC.split("\n");
+    const sinks = [];
+    lines.forEach((ln, i) => {
+      if (!ln.includes("reasonOf(") || /function reasonOf/.test(ln)) return;
+      if (/bannerText\([^)]*reasonOf\(/.test(ln)) return;                 // textContent
+      if (/\(e\) => \(\{ err: reasonOf\(e\) \}\)/.test(ln)) return;        // crossCall: chỉ đếm số lỗi
+      if (/d\.logsError = reasonOf\(e\)/.test(ln)) return;                  // hiển thị qua esc(DIR.logsError)
+      const m = ln.match(/const (\w+) = reasonOf\(err\);/);
+      if (m) {
+        // Biến nhận kết quả chỉ được dùng trong logEntry (renderLedger esc từng trường), bannerText hoặc alert.
+        const next = lines.slice(i + 1, i + 4).filter((l) => new RegExp("\\b" + m[1] + "\\b").test(l));
+        if (next.every((l) => /logEntry\(|bannerText\(|alert\(/.test(l))) return;
+      }
+      sinks.push((i + 1) + ": " + ln.trim());
+    });
+    expect(sinks, "chỗ dùng reasonOf() chưa được chứng minh an toàn").to.deep.equal([]);
+    expect(SRC).to.include("esc(DIR.logsError)");
+    expect(SRC).to.include('rows.push(["Lý do", esc(e.reason)])');
+  });
+
+  it("esc() vô hiệu hóa payload", () => {
+    const safe = ui.esc(PAYLOAD);   // hàm thật của giao diện
     expect(safe).to.not.include("<img");
     expect(safe).to.include("&lt;img");
   });

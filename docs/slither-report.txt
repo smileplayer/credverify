@@ -1,24 +1,42 @@
-'npx hardhat clean' running (wd: ***)
-'npx hardhat clean --global' running (wd: ***)
-'npx hardhat compile --force' running (wd: ***)
-slither.exe : INFO:Detectors:
-At line:1 char:1
-+ & "**** ...
-+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (INFO:Detectors::String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 
+# Slither 0.11.6 — CredentialRegistry V3 (2026-10-08)
+# Lệnh: slither . --filter-paths "contracts/attack|contracts/test|contracts/legacy|node_modules" --exclude-dependencies
+# Kết quả: 10 cảnh báo, 0 High/Medium. 3 × "timestamp" (Low): so sánh thời gian THẬT với cửa sổ INHERIT_DELAY / 7 ngày / 30 ngày — độ lệch timestamp validator điều khiển được (vài giây) không đáng kể. 7 × Informational, đều có chủ đích: 6 ở vòng kiểm tên theo danh sách cho phép — "assembly" (chỉ đọc calldata), "cyclomatic-complexity" (16 nhánh = các dải byte UTF-8 tiếng Việt), 4 × "too-many-digits" (hằng mặt nạ bit, có chú thích); 1 × "naming-convention" — INHERIT_DELAY là immutable (tham số constructor) nhưng giữ tên viết hoa như một hằng cấu hình. Xem docs/AUDIT-V3.md.
+
+INFO:Detectors:
 Detector: timestamp
-CredentialRegistry.issueCertificate(bytes32,address) (contracts/CredentialRegistry.sol#193-210) uses timestamp for 
-comparisons
+CredentialRegistry.proposeInherit(address,address,uint64) (contracts/CredentialRegistry.sol#326-343) uses timestamp for comparisons
 	Dangerous comparisons:
-	- require(bool,string)(certificates[certId].status == Status.None,CredentialRegistry: certificate already exists for 
-this issuer and file) (contracts/CredentialRegistry.sol#199)
-CredentialRegistry.revokeCertificate(bytes32) (contracts/CredentialRegistry.sol#215-224) uses timestamp for comparisons
+	- compromisedSince != 0 && (compromisedSince > block.timestamp || uint256(compromisedSince) + MAX_COMPROMISE_LOOKBACK < block.timestamp) (contracts/CredentialRegistry.sol#331-334)
+CredentialRegistry.executeInherit(address) (contracts/CredentialRegistry.sol#357-393) uses timestamp for comparisons
 	Dangerous comparisons:
-	- require(bool,string)(cert.status == Status.Issued,CredentialRegistry: certificate not in Issued state) 
-(contracts/CredentialRegistry.sol#217)
-	- require(bool,string)(_inheritsFrom(cert.issuer,msg.sender),CredentialRegistry: not the issuing key or its 
-successor) (contracts/CredentialRegistry.sol#219)
+	- block.timestamp < p.eta (contracts/CredentialRegistry.sol#360)
+	- block.timestamp > uint256(p.eta) + PROPOSAL_TTL (contracts/CredentialRegistry.sol#361)
+CredentialRegistry._requireInRecoveryWindow(address) (contracts/CredentialRegistry.sol#433-435) uses timestamp for comparisons
+	Dangerous comparisons:
+	- block.timestamp > uint256(disabledAt[key]) + RECOVERY_WINDOW (contracts/CredentialRegistry.sol#434)
 Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#block-timestamp
-INFO:Slither:. analyzed (2 contracts with 102 detectors), 2 result(s) found
+INFO:Detectors:
+Detector: assembly
+CredentialRegistry._requireCanonicalName(bytes) (contracts/CredentialRegistry.sol#456-504) uses assembly
+	- INLINE ASM (contracts/CredentialRegistry.sol#462-502)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#assembly-usage
+INFO:Detectors:
+Detector: cyclomatic-complexity
+CredentialRegistry._requireCanonicalName(bytes) (contracts/CredentialRegistry.sol#456-504) has a high cyclomatic complexity (16).
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#cyclomatic-complexity
+INFO:Detectors:
+Detector: naming-convention
+Variable CredentialRegistry.INHERIT_DELAY (contracts/CredentialRegistry.sol#127) is not in mixedCase
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#conformance-to-solidity-naming-conventions
+INFO:Detectors:
+Detector: too-many-digits
+CredentialRegistry.slitherConstructorConstantVariables() (contracts/CredentialRegistry.sol#28-771) uses literals with too many digits:
+	- _ASCII_OK = 0x7fffffe07fffffe03ff330100000000 (contracts/CredentialRegistry.sol#444)
+CredentialRegistry.slitherConstructorConstantVariables() (contracts/CredentialRegistry.sol#28-771) uses literals with too many digits:
+	- _C4_OK = 0x3000003000c (contracts/CredentialRegistry.sol#448)
+CredentialRegistry.slitherConstructorConstantVariables() (contracts/CredentialRegistry.sol#28-771) uses literals with too many digits:
+	- _C5_OK = 0x30000000000 (contracts/CredentialRegistry.sol#449)
+CredentialRegistry.slitherConstructorConstantVariables() (contracts/CredentialRegistry.sol#28-771) uses literals with too many digits:
+	- _C6_OK = 0x1800300000000 (contracts/CredentialRegistry.sol#450)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#too-many-digits
+INFO:Slither:. analyzed (5 contracts with 102 detectors), 10 result(s) found

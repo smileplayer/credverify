@@ -7,7 +7,6 @@
 | Đề tài | CredVerify — Hệ thống cấp phát, xác minh và thu hồi chứng chỉ khóa học trên blockchain |
 | Hình thức | Cá nhân |
 | Họ và tên | Tạ Minh Đức |
-| MSSV | 25520343 |
 | Giảng viên hướng dẫn | Trần Tuấn Dũng |
 | Repository | https://github.com/smileplayer/credverify |
 
@@ -27,7 +26,7 @@ Sinh viên có sử dụng công cụ hỗ trợ trong quá trình thực hiện
 | **Trợ lý AI (mô hình ngôn ngữ)** | Rà soát bảo mật đối kháng; phản biện thiết kế; sinh mã nháp cho contract, test và giao diện | Xuyên suốt đề tài. |
 | Hardhat + solidity-coverage | Biên dịch, kiểm thử, đo độ phủ | `npx hardhat test`, `npx hardhat coverage` |
 | Slither 0.11.6 | Phân tích tĩnh smart contract | `npm run slither` |
-| MetaMask | Kiểm thử luồng ghi bằng ví thật | 11 ảnh trong `picture/screenshots/` |
+| MetaMask | Kiểm thử luồng ghi bằng ví thật | Ảnh chụp giao diện V2 đã gỡ; chụp lại trên bản Sepolia |
 
 Sinh viên chịu trách nhiệm kiểm chứng toàn bộ nội dung. **Không có nội dung nào do công cụ sinh
 ra được sử dụng như một nguồn tài liệu tham khảo.** Mọi trích dẫn trong báo cáo đều dẫn tới nguồn

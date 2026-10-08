@@ -6,495 +6,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CredVerify</title>
   <link rel="icon" type="image/png" sizes="512x512" href="../picture/logo.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap"
-    rel="stylesheet">
-
+  <!-- Không tải font từ Google Fonts: mỗi lượt xác minh không báo cho bên thứ ba.
+       CSP: script-src chỉ cho 'self' và CDN của ethers (kèm SRI), không script nội tuyến.
+       connect-src chỉ gồm các RPC trong RPC_URLS (app.js); đổi RPC_URLS thì chạy
+       node scripts/page-integrity.js . Khi phát hành: node scripts/page-integrity.js --release
+       gắn integrity (SRI) cho app.js và app.css. -->
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'none';
-    script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
-    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-    font-src https://fonts.gstatic.com;
+    script-src 'self' https://cdn.jsdelivr.net;
+    style-src 'self' 'unsafe-inline';
     img-src 'self' data:;
-    connect-src *;
+    connect-src http://127.0.0.1:8545;
     object-src 'none'; base-uri 'none'; form-action 'none'">
 
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"
     integrity="sha384-gpR0Q6Hx/O+uevlbpbANbS0LWjbejPV1sqD/8w422l/fW8whGY0EPmKw3uG7ACYP"
     crossorigin="anonymous"></script>
-  <style>
-    :root {
-      --ink: #16202B;
-      --ink-soft: #5A6975;
-      --ground: #E9EDF0;
-      --surface: #FFFFFF;
-      --rule: #C7D0D7;
-      --rule-soft: #E1E7EB;
-      --seal: #A32B2B;
-      --valid: #1B6B58;
-      --pending: #8A6A1F;
-      --radius: 2px;
-    }
-
-    * {
-      box-sizing: border-box
-    }
-
-    html,
-    body {
-      margin: 0;
-      padding: 0
-    }
-
-    body {
-      background: var(--ground);
-      color: var(--ink);
-      font-family: 'IBM Plex Sans', system-ui, sans-serif;
-      font-size: 15px;
-      line-height: 1.55;
-      -webkit-font-smoothing: antialiased;
-    }
-
-    .mono {
-      font-family: 'IBM Plex Mono', ui-monospace, monospace
-    }
-
-    /* ---------- Masthead ---------- */
-    header {
-      border-bottom: 2px solid var(--ink);
-      background: var(--surface);
-    }
-
-    .masthead {
-      max-width: 1180px;
-      margin: 0 auto;
-      padding: 22px 24px 16px;
-      display: flex;
-      align-items: flex-end;
-      justify-content: space-between;
-      gap: 24px;
-      flex-wrap: wrap;
-    }
-
-    .brand h1 {
-      font-family: 'IBM Plex Serif', Georgia, serif;
-      font-weight: 600;
-      font-size: 27px;
-      margin: 0;
-      letter-spacing: -0.01em;
-    }
-
-    .brand p {
-      margin: 2px 0 0;
-      color: var(--ink-soft);
-      font-size: 13px;
-      text-transform: uppercase;
-      letter-spacing: 0.09em;
-    }
-
-    .conn {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      flex-wrap: wrap
-    }
-
-    .chip {
-      border: 1px solid var(--rule);
-      padding: 5px 9px;
-      border-radius: var(--radius);
-      font-size: 12px;
-      background: var(--surface);
-    }
-
-    .chip b {
-      font-weight: 500;
-      color: var(--ink-soft);
-      font-weight: 400
-    }
-
-    /* ---------- Buttons ---------- */
-    button {
-      font-family: inherit;
-      font-size: 14px;
-      cursor: pointer;
-      border-radius: var(--radius);
-      border: 1px solid var(--ink);
-      background: var(--ink);
-      color: #fff;
-      padding: 9px 16px;
-      transition: opacity .12s ease;
-    }
-
-    button:hover:not(:disabled) {
-      opacity: .85
-    }
-
-    button:disabled {
-      opacity: .4;
-      cursor: not-allowed
-    }
-
-    button.ghost {
-      background: transparent;
-      color: var(--ink)
-    }
-
-    button.small {
-      padding: 5px 10px;
-      font-size: 12.5px
-    }
-
-    :focus-visible {
-      outline: 2px solid var(--seal);
-      outline-offset: 2px
-    }
-
-    /* ---------- Layout ---------- */
-    main {
-      max-width: 1180px;
-      margin: 0 auto;
-      padding: 22px 24px 60px;
-      display: grid;
-      grid-template-columns: 1fr 372px;
-      gap: 26px;
-      align-items: start
-    }
-
-    @media(max-width:1000px) {
-      main {
-        grid-template-columns: 1fr
-      }
-    }
-
-    nav {
-      display: flex;
-      gap: 0;
-      border-bottom: 1px solid var(--rule);
-      margin-bottom: 22px;
-      flex-wrap: wrap
-    }
-
-    nav button {
-      background: none;
-      border: none;
-      border-bottom: 2px solid transparent;
-      color: var(--ink-soft);
-      padding: 9px 15px 8px;
-      font-size: 14px;
-      margin-bottom: -1px;
-      border-radius: 0;
-    }
-
-    nav button.on {
-      color: var(--ink);
-      border-bottom-color: var(--seal);
-      font-weight: 500
-    }
-
-    .panel {
-      background: var(--surface);
-      border: 1px solid var(--rule);
-      border-radius: var(--radius);
-      padding: 22px
-    }
-
-    .panel h2 {
-      font-family: 'IBM Plex Serif', serif;
-      font-size: 19px;
-      margin: 0 0 4px
-    }
-
-    .panel .lede {
-      color: var(--ink-soft);
-      font-size: 13.5px;
-      margin: 0 0 20px
-    }
-
-    label {
-      display: block;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-      color: var(--ink-soft);
-      margin: 0 0 5px
-    }
-
-    .hint {
-      font-size: 12.5px;
-      color: var(--ink-soft);
-      margin: 5px 0 0
-    }
-
-    input[type=text],
-    input[type=file] {
-      width: 100%;
-      padding: 9px 10px;
-      border: 1px solid var(--rule);
-      border-radius: var(--radius);
-      font-family: inherit;
-      font-size: 14px;
-      background: var(--surface);
-      color: var(--ink);
-    }
-
-    input.mono {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 12.5px
-    }
-
-    input:focus {
-      outline: none;
-      border-color: var(--ink)
-    }
-
-    .field {
-      margin-bottom: 16px
-    }
-
-    .row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px
-    }
-
-    @media(max-width:620px) {
-      .row {
-        grid-template-columns: 1fr
-      }
-    }
-
-    /* ---------- Result card ---------- */
-    .verdict {
-      border: 1px solid var(--rule);
-      border-left-width: 4px;
-      padding: 15px 17px;
-      margin-top: 20px;
-      border-radius: var(--radius)
-    }
-
-    .verdict.valid {
-      border-left-color: var(--valid)
-    }
-
-    .verdict.invalid {
-      border-left-color: var(--seal)
-    }
-
-    .verdict.none {
-      border-left-color: var(--ink-soft)
-    }
-
-    .verdict h3 {
-      margin: 0 0 3px;
-      font-size: 16px;
-      font-family: 'IBM Plex Serif', serif
-    }
-
-    .verdict.valid h3 {
-      color: var(--valid)
-    }
-
-    .verdict.invalid h3 {
-      color: var(--seal)
-    }
-
-    .verdict p {
-      margin: 0;
-      font-size: 13.5px;
-      color: var(--ink-soft)
-    }
-
-    dl {
-      margin: 14px 0 0;
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 6px 16px;
-      font-size: 12.5px
-    }
-
-    dt {
-      color: var(--ink-soft)
-    }
-
-    dd {
-      margin: 0;
-      font-family: 'IBM Plex Mono', monospace;
-      word-break: break-all
-    }
-
-    .status-tag {
-      display: inline-block;
-      font-size: 11px;
-      letter-spacing: .06em;
-      text-transform: uppercase;
-      padding: 2px 7px;
-      border: 1px solid currentColor;
-      border-radius: var(--radius)
-    }
-
-    .t-issued {
-      color: var(--valid)
-    }
-
-    .t-revoked {
-      color: var(--seal)
-    }
-
-    .t-none {
-      color: var(--ink-soft)
-    }
-
-    /* ---------- Table ---------- */
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-      margin-top: 6px
-    }
-
-    th {
-      text-align: left;
-      font-weight: 500;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: .07em;
-      color: var(--ink-soft);
-      border-bottom: 1px solid var(--rule);
-      padding: 7px 8px 7px 0
-    }
-
-    td {
-      padding: 10px 8px 10px 0;
-      border-bottom: 1px solid var(--rule-soft);
-      vertical-align: top
-    }
-
-    .empty {
-      color: var(--ink-soft);
-      font-size: 13.5px;
-      padding: 22px 0;
-      text-align: center
-    }
-
-    /* ---------- Evidence ledger (signature element) ---------- */
-    aside {
-      position: sticky;
-      top: 22px
-    }
-
-    .ledger {
-      background: var(--surface);
-      border: 1px solid var(--ink);
-      border-radius: var(--radius);
-      overflow: hidden
-    }
-
-    .ledger-head {
-      border-bottom: 1px solid var(--ink);
-      padding: 13px 16px;
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 10px;
-    }
-
-    .ledger-head h2 {
-      font-family: 'IBM Plex Serif', serif;
-      font-size: 15px;
-      margin: 0
-    }
-
-    .ledger-head span {
-      font-size: 11.5px;
-      color: var(--ink-soft);
-      text-transform: uppercase;
-      letter-spacing: .07em
-    }
-
-    .ledger-body {
-      max-height: 60vh;
-      overflow-y: auto
-    }
-
-    .entry {
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--rule-soft);
-      font-size: 12.5px
-    }
-
-    .entry:last-child {
-      border-bottom: none
-    }
-
-    .entry-top {
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-      margin-bottom: 5px
-    }
-
-    .entry-op {
-      font-weight: 500
-    }
-
-    .entry-time {
-      color: var(--ink-soft);
-      font-size: 11.5px
-    }
-
-    .entry dl {
-      margin-top: 6px;
-      font-size: 11.5px;
-      gap: 3px 12px
-    }
-
-    .entry .fail {
-      color: var(--seal)
-    }
-
-    .ledger-foot {
-      padding: 11px 16px;
-      border-top: 1px solid var(--ink);
-      display: flex;
-      gap: 8px
-    }
-
-    .note {
-      font-size: 12.5px;
-      color: var(--ink-soft);
-      border-left: 2px solid var(--rule);
-      padding-left: 11px;
-      margin-top: 18px
-    }
-
-    .banner {
-      background: #FBF6E9;
-      border: 1px solid #E0D2A8;
-      padding: 11px 14px;
-      border-radius: var(--radius);
-      font-size: 13px;
-      margin-bottom: 18px
-    }
-
-    .banner.err {
-      background: #FBEDED;
-      border-color: #E3BEBE;
-      color: #7A2020
-    }
-
-    .hidden {
-      display: none
-    }
-
-    @media (prefers-reduced-motion:reduce) {
-      * {
-        transition: none !important
-      }
-    }
-  </style>
+  <link rel="stylesheet" href="app.css">
 </head>
 
 <body>
@@ -525,14 +53,6 @@
         </div>
       </div>
 
-      <div class="banner err hidden" id="overrideBanner">
-        <b>Cảnh báo:</b> trang đang trỏ tới một địa chỉ contract <b>không phải</b> địa chỉ chính
-        thức ghi trong mã nguồn. Nếu bạn không phải lập trình viên đang thử nghiệm, hãy bấm
-        <b>Khôi phục địa chỉ chính thức</b> — kết quả xác minh từ một sổ đăng ký lạ không có giá trị.
-        <div class="mono" style="font-size:12px;margin-top:6px"><span id="overrideAddr">—</span></div>
-        <button class="small" id="btnResetContract" style="margin-top:9px">Khôi phục địa chỉ chính thức</button>
-      </div>
-
       <div class="banner err hidden" id="chainBanner">
         <b>Ví đang ở SAI MẠNG.</b> chainId hiện tại <span class="mono" id="chainNow">—</span>,
         sổ đăng ký này nằm trên chainId <span class="mono" id="chainWant">—</span>.
@@ -544,19 +64,8 @@
         </div>
       </div>
 
-      <details style="margin:12px 0 0">
-        <summary style="cursor:pointer;font-size:12.5px;color:var(--ink-soft)">
-          Nâng cao — dành cho lập trình viên
-        </summary>
-        <div class="banner" style="margin-top:10px">
-          Chỉ dùng khi bạn tự deploy contract để phát triển. Trỏ trang này tới một địa chỉ do
-          người khác gửi tới là <b>tự vô hiệu hóa toàn bộ cơ chế chống giả mạo</b>.
-          <div class="field" style="margin:10px 0 0">
-            <input type="text" class="mono" id="inpContract" placeholder="0x… (để trống = dùng địa chỉ chính thức)">
-          </div>
-          <button class="small ghost" id="btnSaveContract" style="margin-top:9px">Dùng địa chỉ này</button>
-        </div>
-      </details>
+      <!-- Thông báo về VÍ (đổi tài khoản, đổi mạng, lỗi kết nối) — của chung cả trang, không thuộc tab nào. -->
+      <div class="banner hidden" id="walletBanner" role="status" aria-live="polite"></div>
 
       <nav>
         <button class="on" data-tab="verify">Xác minh</button>
@@ -580,18 +89,50 @@
         </div>
 
         <div class="field">
-          <label for="vfIssuer">Đơn vị đã cấp</label>
+          <label for="vfReceipt">Biên nhận lô (.json) — chỉ khi chứng chỉ được cấp theo lô</label>
+          <input type="file" id="vfReceipt" accept=".json,application/json">
+          <p class="hint" id="vfReceiptOut">Không có biên nhận: tra theo kiểu cấp lẻ.</p>
+          <button class="small ghost hidden" id="btnClearReceipt" type="button">Bỏ biên nhận</button>
+        </div>
+
+        <div class="field">
+          <label for="vfIssuer">Đơn vị đã cấp (ghi trên chứng chỉ)</label>
           <select id="vfIssuer" style="width:100%;padding:9px 10px;border:1px solid var(--rule);
             border-radius:var(--radius);font-family:inherit;font-size:14px;background:var(--surface);color:var(--ink)">
-            <option value="">Tôi không biết — tra tất cả đơn vị</option>
+            <option value="">— Chọn đơn vị ghi trên chứng chỉ —</option>
           </select>
-          <p class="hint">Chọn đúng đơn vị thì hệ thống tra thẳng bản ghi (một lời gọi).
-            Để "không biết" thì phải quét toàn bộ danh sách đơn vị — chậm hơn và có giới hạn
-            quy mô.</p>
+          <p class="hint">Tên đơn vị cấp in ngay trên chứng chỉ. Danh sách gồm cả đơn vị
+            <b>đã ngừng hoạt động</b> — chứng chỉ của họ vẫn xác minh được. Hệ thống tra thẳng
+            đúng một bản ghi (một lời gọi, không quét danh sách).</p>
+        </div>
+
+        <div class="field">
+          <label for="vfIssuerName">… hoặc gõ đúng tên đơn vị in trên chứng chỉ</label>
+          <input type="text" id="vfIssuerName" placeholder="Trung tâm đào tạo X">
+          <p class="hint">Dùng khi danh sách trên không tải được. Trang tra thẳng tên trong sổ đăng ký
+            (<span class="mono">issuerByName</span>) rồi lần ngược các khóa cũ của đơn vị
+            (<span class="mono">predecessorOf</span>) — chỉ đọc trạng thái hợp đồng, <b>không cần lịch sử
+            sự kiện, không cần máy chủ nào của CredVerify</b>. Tên phải khớp từng chữ (kể cả dấu và chữ hoa);
+            khoảng trắng thừa được tự gộp.</p>
         </div>
 
         <button id="btnVerify">Xác minh</button>
         <div id="verifyOut"></div>
+
+        <div id="proofBox" class="hidden" style="margin-top:22px">
+          <h3 style="font-family:'IBM Plex Serif',Cambria,'Noto Serif','Times New Roman',serif;font-size:16px;margin:0 0 4px">Yêu cầu ứng viên chứng minh mình là chủ chứng chỉ</h3>
+          <p class="hint" style="margin:0 0 10px">Chứng chỉ đúng chưa chắc người nộp đúng — tệp PDF rất dễ bị sao chép.
+            Gửi thông điệp dưới cho ứng viên; ứng viên ký bằng ví ghi trên chứng chỉ (tab <b>Chứng chỉ của tôi</b>),
+            rồi dán chữ ký vào đây. Không tốn phí, không ghi gì lên chuỗi. Thông điệp hết hạn sau 10 phút.</p>
+          <div class="field"><label for="pfRecruiter">Tên nhà tuyển dụng (ghi vào thông điệp)</label>
+            <input type="text" id="pfRecruiter" placeholder="Công ty ABC"></div>
+          <button class="ghost small" id="btnMakeChallenge" type="button">Tạo thông điệp</button>
+          <textarea id="pfMessage" class="mono" rows="7" readonly style="width:100%;margin-top:10px;font-size:12px"></textarea>
+          <div class="field"><label for="pfSig">Chữ ký ứng viên gửi lại (0x…)</label>
+            <input type="text" class="mono" id="pfSig" placeholder="0x…"></div>
+          <button class="small" id="btnCheckSig" type="button">Kiểm tra chữ ký</button>
+          <div id="pfOut"></div>
+        </div>
       </section>
 
       <!-- ===== CẤP ===== -->
@@ -633,7 +174,25 @@
         <p class="note">Hai ô "lưu off-chain" chỉ nằm trong bộ nhớ trình duyệt này, mô phỏng cơ sở
           dữ liệu của đơn vị đào tạo. Hệ thống thật phải là máy chủ có kiểm soát truy cập và mã hóa.
           <b>Thu hồi là vĩnh viễn</b>: một tệp đã thu hồi không cấp lại được — bản sửa phải là một
-          tệp khác, tức một hash khác.</p>
+          tệp khác, tức một hash khác. <b>Riêng tư:</b> đường cấp lẻ này đưa hash tệp và ví học viên lên
+          chuỗi ở dạng rõ. Muốn chỉ một commitment có salt lên chuỗi, dùng <b>cấp theo lô</b> bên dưới — kể cả
+          với một chứng chỉ, chi phí gần như bằng, nhưng học viên phải giữ biên nhận.</p>
+
+        <h3 style="font-family:'IBM Plex Serif',Cambria,'Noto Serif','Times New Roman',serif;font-size:16px;margin:30px 0 4px">Cấp theo lô — một giao dịch cho nhiều chứng chỉ</h3>
+        <p class="hint" style="margin:0 0 12px">Chọn nhiều tệp cùng lúc. Trang dựng cây Merkle ngay trên máy này và chỉ đưa
+          <b>một root</b> lên chuỗi (~72.000 gas bất kể số tệp). Mỗi học viên nhận một <b>biên nhận</b>
+          (salt + proof) — mất biên nhận là không xác minh được, nên trang lưu một bản sao trên máy này.</p>
+        <div class="field">
+          <label for="btFiles">Các tệp chứng chỉ</label>
+          <input type="file" id="btFiles" multiple>
+        </div>
+        <div id="btRows"></div>
+        <button id="btnPublishBatch" disabled>Đăng lô</button>
+        <div id="batchOut"></div>
+        <p class="note">Ví học viên là tùy chọn — để trống thì chứng chỉ "vô danh": ai giữ tệp và biên nhận
+          là người trình diện được. Biên nhận đặt tên bằng số thứ tự và 8 ký tự đầu của hash, <b>không</b> chứa
+          tên tệp gốc. Bản sao biên nhận nằm trong <span class="mono">localStorage</span> của trình duyệt này
+          (xem tab Tra cứu &amp; thu hồi) và bị xóa cùng nút "Xóa dữ liệu off-chain".</p>
       </section>
 
       <!-- ===== CHỨNG CHỈ CỦA TÔI ===== -->
@@ -652,7 +211,16 @@
 
         <p class="note">Chỉ đọc dữ liệu công khai, không phát sinh giao dịch. Lưu ý về quyền riêng tư:
           event này được đánh chỉ mục theo ví học viên, nên <b>bất kỳ ai</b> cũng liệt kê được toàn bộ
-          chứng chỉ của một địa chỉ.</p>
+          chứng chỉ của một địa chỉ. Chứng chỉ cấp theo lô thì không hiện ở đây — ví học viên chỉ nằm trong
+          biên nhận, không lên chuỗi.</p>
+
+        <h3 style="font-family:'IBM Plex Serif',Cambria,'Noto Serif','Times New Roman',serif;font-size:16px;margin:26px 0 4px">Ký xác nhận cho nhà tuyển dụng</h3>
+        <p class="hint" style="margin:0 0 10px">Dán thông điệp nhà tuyển dụng gửi, kết nối <b>đúng ví ghi trên chứng chỉ</b>,
+          bấm Ký. Ví hiện nội dung để bạn đọc trước khi ký; ký thông điệp <b>không</b> gửi giao dịch, không tốn phí và
+          không cho ai quyền gì với ví của bạn. Chỉ ký thông điệp bắt đầu bằng "CredVerify — xác nhận chủ chứng chỉ".</p>
+        <textarea id="sgMessage" class="mono" rows="7" style="width:100%;font-size:12px"></textarea>
+        <button class="small" id="btnSign" type="button" style="margin-top:8px">Ký bằng ví</button>
+        <div id="sgOut"></div>
       </section>
 
       <!-- ===== TRA CỨU & THU HỒI ===== -->
@@ -661,9 +229,11 @@
         <p class="lede">Chứng chỉ đã cấp từ trình duyệt này. Chỉ đúng ví đã cấp — hoặc khóa kế nhiệm
           của nó, và phải đang còn quyền — mới thu hồi được.</p>
         <div id="listOut"></div>
+        <h3 style="font-family:'IBM Plex Serif',Cambria,'Noto Serif','Times New Roman',serif;font-size:16px;margin:26px 0 4px">Lô đã đăng từ trình duyệt này</h3>
+        <div id="batchListOut"></div>
         <button class="ghost small" id="btnRefresh" style="margin-top:16px">Làm mới trạng thái từ chuỗi</button>
         <button class="ghost small" id="btnWipeStore" style="margin-left:8px">Xóa dữ liệu off-chain</button>
-        <p class="note">Họ tên học viên và tên khóa học chỉ nằm trong <span class="mono">localStorage</span>
+        <p class="note">Họ tên học viên, tên khóa học và bản sao biên nhận lô chỉ nằm trong <span class="mono">localStorage</span>
           của trình duyệt này — không máy chủ nào lưu chúng. Nút trên xóa sạch chúng khỏi máy này; bản ghi
           trên chuỗi (hash + địa chỉ ví) không bị ảnh hưởng vì không thể sửa. </p>
       </section>
@@ -674,11 +244,17 @@
         <p class="lede">Danh sách công khai, đọc thẳng từ chuỗi, không cần ví. Đây là thứ khiến một
           đơn vị được thêm lén <b>không còn vô hình</b>.</p>
 
+        <div id="pendingWarn"></div>
         <div id="dupWarn"></div>
         <div id="dirOut"><p class="empty">Đang đọc…</p></div>
         <button class="ghost small" id="btnRefreshDir" style="margin-top:16px">Tải lại</button>
 
-        <h3 style="font-family:'IBM Plex Serif',serif;font-size:16px;margin:28px 0 4px">Nhật ký quản trị</h3>
+        <h3 style="font-family:'IBM Plex Serif',Cambria,'Noto Serif','Times New Roman',serif;font-size:16px;margin:28px 0 4px">Thống kê kiểm toán theo đơn vị</h3>
+        <p class="hint" style="margin:0 0 12px">Mỗi đơn vị đã cấp, đăng lô và thu hồi bao nhiêu lần — đếm thẳng từ event
+          trên chuỗi. Một trung tâm bỗng thu hồi hàng loạt, hay một khóa lộ vẫn tiếp tục cấp, hiện ra ở đây.</p>
+        <div id="statsOut"><p class="empty">Đang đọc…</p></div>
+
+        <h3 style="font-family:'IBM Plex Serif',Cambria,'Noto Serif','Times New Roman',serif;font-size:16px;margin:28px 0 4px">Nhật ký quản trị &amp; đăng lô</h3>
         <p class="hint" style="margin:0 0 12px">Toàn bộ lịch sử công nhận, gỡ bỏ và chuyển giao đơn vị
           phát hành. <b>Việc ghi nhận công khai chỉ có sức răn đe nếu có người xem</b> — bảng này tồn tại
           để việc xem đó khả thi.</p>
@@ -697,9 +273,10 @@
 
         <div class="banner" id="govBox" style="margin:0 0 20px">Đang đọc…</div>
 
-        <h3 style="font-family:'IBM Plex Serif',serif;font-size:16px;margin:24px 0 4px">Công nhận đơn vị phát hành</h3>
+        <h3 style="font-family:'IBM Plex Serif',Cambria,'Noto Serif','Times New Roman',serif;font-size:16px;margin:24px 0 4px">Công nhận đơn vị phát hành</h3>
         <p class="hint" style="margin:0 0 12px">Tên phải là <b>duy nhất</b> — contract từ chối hai ví
-          mang cùng một tên. Địa chỉ owner không được là đơn vị phát hành.</p>
+          mang cùng một tên. Địa chỉ owner (kể cả owner đang được đề cử) không được là đơn vị phát
+          hành, và một địa chỉ từng là đơn vị phát hành không bao giờ nhận được quyền owner.</p>
         <div class="row">
           <div class="field"><label for="adAddr">Địa chỉ ví đơn vị</label>
             <input type="text" class="mono" id="adAddr" placeholder="0x…"></div>
@@ -712,17 +289,20 @@
           <button class="ghost" id="btnRestoreIssuer">Bật lại</button>
           <button class="ghost" id="btnCheckIssuer">Kiểm tra</button>
         </div>
-        <p class="note">Gỡ quyền cắt <b>toàn bộ</b> quyền của ví đó, kể cả quyền thu hồi các chứng chỉ
+        <p class="note"><b>Bật lại</b> chỉ dành cho trường hợp gỡ nhầm một khóa chắc chắn còn an toàn,
+          và chỉ làm được trong 7 ngày kể từ lúc gỡ.
+          Gỡ quyền cắt <b>toàn bộ</b> quyền của ví đó, kể cả quyền thu hồi các chứng chỉ
           nó đã cấp. Nhưng gỡ quyền <b>không</b> làm mất hiệu lực chứng chỉ đã cấp — owner
           không có quyền viết lại quá khứ của một đơn vị.</p>
 
-        <h3 style="font-family:'IBM Plex Serif',serif;font-size:16px;margin:26px 0 4px">Chuyển giao (xoay khóa)</h3>
+        <h3 style="font-family:'IBM Plex Serif',Cambria,'Noto Serif','Times New Roman',serif;font-size:16px;margin:26px 0 4px">Chuyển giao (xoay khóa)</h3>
         <div class="banner err" style="margin:0 0 12px">
-          <b>Thứ tự thao tác quyết định kết quả.</b> Khi một khóa bị lộ, hãy chuyển giao
-          <b>NGAY</b> — <span class="mono">inheritIssuer</span> tự vô hiệu hóa khóa cũ và đồng thời
-          chuyển quyền thu hồi sang khóa mới. Nếu bấm <b>Gỡ quyền</b> trước thì chuyển giao sẽ bị chặn
-          (phải bấm <b>Bật lại</b> rồi mới chuyển giao được). <span class="mono">Gỡ quyền</span> là để
-          cho nghỉ có trật tự, không phải để chữa cháy.
+          <b>Khi một khóa bị lộ:</b> (1) bấm <b>Gỡ quyền</b> ngay — tức thì chặn khóa đó cấp và thu hồi;
+          (2) <b>Đề xuất chuyển giao</b> sang khóa mới <b>trong vòng 7 ngày</b>, đánh dấu "khóa bị lộ" và
+          chọn <b>mốc sớm nhất</b> khóa có thể đã rơi vào tay kẻ gian; (3) sau <b class="delayText">48 giờ</b> bấm
+          <b>Thực thi</b>. Từ mốc lộ, mọi lần thu hồi do khóa cũ làm bị <b>vô hiệu tự động</b>, và mọi
+          chứng chỉ nó cấp bị gắn cờ <b>không đáng tin</b>. Mốc lộ không lùi quá 30 ngày.
+          <b>Đừng bao giờ bấm Bật lại</b> một khóa nghi bị lộ.
         </div>
         <div class="row">
           <div class="field"><label for="inhOld">Khóa cũ</label>
@@ -730,11 +310,24 @@
           <div class="field"><label for="inhNew">Khóa mới</label>
             <input type="text" class="mono" id="inhNew" placeholder="0x…"></div>
         </div>
-        <button id="btnInherit">Chuyển giao danh tính</button>
-        <p class="note">Tên được chép sang khóa mới, và <b>chuyển</b> chứ không nhân bản. Chuỗi kế nhiệm
-          giới hạn <b>8 đời</b>: sau đó chứng chỉ do khóa đời đầu cấp không còn ai thu hồi được.</p>
+        <div class="row">
+          <div class="field"><label for="inhCompromised"><input type="checkbox" id="inhCompromised"> Khóa cũ bị lộ</label></div>
+          <div class="field"><label for="inhSince">Bị lộ từ (giờ máy bạn)</label>
+            <input type="datetime-local" id="inhSince"></div>
+        </div>
+        <div style="display:flex;gap:9px;flex-wrap:wrap">
+          <button id="btnProposeInherit">Đề xuất chuyển giao</button>
+          <button class="ghost" id="btnExecuteInherit">Thực thi (sau <span class="delayText">48 giờ</span>)</button>
+          <button class="ghost" id="btnCancelInherit">Hủy đề xuất</button>
+        </div>
+        <div id="pendingAdmin"></div>
+        <p class="note">Đề xuất được ghi <b>công khai</b> (hiện ở tab Đơn vị phát hành) và phải chờ
+          <span class="delayText">48 giờ</span> (giá trị đọc từ hợp đồng — bản thử nghiệm đặt 1 phút để demo, thiết kế
+          production là 48 giờ), để trung tâm thật kịp thấy và phản đối nếu đây không phải yêu cầu của họ. Đề xuất hết hạn nếu
+          không thực thi trong 7 ngày sau thời điểm được phép thực thi. Tên đi theo danh tính, <b>chuyển</b> chứ không nhân
+          bản. Khóa mới nhất luôn thu hồi được mọi chứng chỉ và mọi lô do các khóa trước của cùng đơn vị cấp.</p>
 
-        <h3 style="font-family:'IBM Plex Serif',serif;font-size:16px;margin:26px 0 4px">Chuyển quyền owner</h3>
+        <h3 style="font-family:'IBM Plex Serif',Cambria,'Noto Serif','Times New Roman',serif;font-size:16px;margin:26px 0 4px">Chuyển quyền owner</h3>
         <p class="hint" style="margin:0 0 12px">Hai bước, để gõ nhầm một ký tự không làm mất quyền
           vĩnh viễn. Bên nhận phải chủ động bấm <b>Nhận quyền</b>.</p>
         <div class="field">
@@ -743,6 +336,7 @@
         </div>
         <div style="display:flex;gap:9px;flex-wrap:wrap">
           <button class="ghost" id="btnTransferOwner">Chuyển quyền owner</button>
+          <button class="ghost" id="btnCancelOwner">Hủy đề cử</button>
           <button class="ghost" id="btnAcceptOwner">Nhận quyền owner</button>
         </div>
 
@@ -768,928 +362,7 @@
       </div>
     </aside>
   </main>
-  <script>
-    /* =========================================================================
-       CredVerify — giao diện cho kiến trúc V2 (sổ đăng ký DÙNG CHUNG).
-
-       NGUYÊN TẮC PHÂN CHIA TRÁCH NHIỆM giữa contract và trang này:
-
-         Contract cưỡng chế cái gì phải ĐÚNG.
-         Giao diện cung cấp cái gì phải được NHÌN THẤY.
-
-       Hỏng vì "trạng thái thay đổi khi không được phép"  -> việc của contract.
-       Hỏng vì "con người tin nhầm vì thiếu thông tin"     -> việc của trang này.
-
-       GIỚI HẠN: mọi cảnh báo ở đây chỉ bảo vệ người ĐANG DÙNG trang này.
-       Kẻ tấn công dựng trang riêng, hoặc gọi thẳng contract qua Etherscan. Đây là lớp
-       phòng vệ chống NHẦM LẪN, không phải lớp phòng vệ chống TẤN CÔNG. Mọi ràng buộc
-       phân quyền nằm trong contract và phải ở lại đó.
-       ========================================================================= */
-
-    const ABI = [
-      // --- đọc ---
-      "function owner() view returns (address)",
-      "function pendingOwner() view returns (address)",
-      "function issuerStatus(address) view returns (uint8)",
-      "function issuerName(address) view returns (string)",
-      "function nameHolder(bytes32) view returns (address)",
-      "function issuerByName(string name) view returns (address)",
-      "function inheritedBy(address) view returns (address)",
-      "function activeIssuerCount() view returns (uint256)",
-      "function certIdOf(address issuer, bytes32 certHash) pure returns (bytes32)",
-      "function certificates(bytes32) view returns (address issuer, uint8 status, uint64 issuedAt, address holder, uint64 revokedAt)",
-      "function getCertificate(bytes32 certId) view returns (tuple(address issuer, uint8 status, uint64 issuedAt, address holder, uint64 revokedAt))",
-      "function verifyCertificate(address issuer, bytes32 certHash) view returns (tuple(bool valid, uint8 status, address holder, uint64 issuedAt, uint64 revokedAt, uint8 issuerState, string issuerDisplayName))",
-      "function findByHash(bytes32 certHash) view returns (address[] issuers, bytes32[] certIds, uint8[] statuses)",
-      "function listActiveIssuers() view returns (address[] addrs, string[] names)",
-      "function knownIssuers() view returns (address[])",
-      "function governance() view returns (address owner_, address pendingOwner_, uint256 activeIssuerCount_, uint256 knownIssuerCount_)",
-      // --- nghiệp vụ ---
-      "function issueCertificate(bytes32 certHash, address holder) returns (bytes32)",
-      "function revokeCertificate(bytes32 certId)",
-      // --- quản trị (owner) ---
-      "function addIssuer(address issuerAddress, string name)",
-      "function removeIssuer(address issuerAddress)",
-      "function restoreIssuer(address issuerAddress)",
-      "function inheritIssuer(address oldIssuer, address newIssuer)",
-      "function transferOwnership(address newOwner)",
-      "function acceptOwnership()",
-      // --- event ---
-      "event CertificateIssued(bytes32 certId, bytes32 indexed certHash, address indexed issuer, address indexed holder, uint256 issuedAt)",
-      "event CertificateRevoked(bytes32 indexed certId, address indexed by, uint256 revokedAt)",
-      "event IssuerAdded(address indexed issuerAddress, string name)",
-      "event IssuerRemoved(address indexed issuerAddress)",
-      "event IssuerRestored(address indexed issuerAddress)",
-      "event IssuerInherited(address indexed oldIssuer, address indexed newIssuer, string name)",
-      "event OwnershipTransferStarted(address indexed from, address indexed to)",
-      "event OwnershipTransferred(address indexed from, address indexed to)"
-    ];
-
-    const STATUS_LABEL = ["Chưa tồn tại", "Còn hiệu lực", "Đã thu hồi"];
-    const STATUS_CLASS = ["t-none", "t-issued", "t-revoked"];
-    const ISSUER_LABEL = ["Chưa được công nhận", "Đang hoạt động", "Đã bị vô hiệu hóa"];
-
-    const KEY_CONTRACT = "credverify.contract";
-    const KEY_STORE    = "credverify.offchain";
-    const KEY_LEDGER   = "credverify.ledger";
-
-    const CONTRACT_ADDRESS  = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
-    const EXPECTED_CHAIN_ID = 31337n;   // 11155111n cho Sepolia
-
-    let provider, signer, contract, account, contractAddress;
-
-    const RPC_URL = "http://127.0.0.1:8545";   // đổi sang endpoint testnet khi deploy công khai
-    let readProvider = null, readContract = null;
-
-    function initReadOnly() {
-      try {
-        readProvider = new ethers.JsonRpcProvider(RPC_URL);
-        readContract = new ethers.Contract(CONTRACT_ADDRESS, ABI, readProvider);
-      } catch { readProvider = null; readContract = null; }
-    }
-    const reader = () => contract || readContract;
-
-    const BLOCK_CHUNK = 10000;
-    async function queryLogsChunked(c, filter) {
-      const prov = c.runner?.provider || readProvider;
-      const latest = await prov.getBlockNumber();
-      const out = [];
-      let to = latest;
-      while (to >= 0) {
-        const from = Math.max(0, to - BLOCK_CHUNK + 1);
-        out.push(...(await c.queryFilter(filter, from, to)));
-        if (from === 0) break;
-        to = from - 1;
-      }
-      return out.sort((a, b) => a.blockNumber - b.blockNumber);
-    }
-
-    /* ---------- tiện ích ---------- */
-    const $ = (id) => document.getElementById(id);
-    const short = (s, head = 10, tail = 8) =>
-      !s ? "—" : (s.length <= head + tail + 2 ? s : s.slice(0, head) + "…" + s.slice(-tail));
-
-    // Thoát ký tự HTML. 
-    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-
-    // certId tính ngay tại client
-    const certIdOf = (issuer, certHash) =>
-      ethers.solidityPackedKeccak256(["address", "bytes32"], [issuer, certHash]);
-
-    /* CHUẨN HÓA TÊN — thứ contract KHÔNG làm được với giá hợp lý.
-
-       Giới hạn còn lại: bảng dưới chỉ phủ Kirin + Hy Lạp, là hai bảng chữ có nguy
-       cơ thực tế với tên tiếng Việt/Latin. Bảng confusables đầy đủ của Unicode
-       (UTS #39) lớn hơn nhiều. */
-    const CONFUSABLES = {
-      "а":"a","е":"e","о":"o","р":"p","с":"c","у":"y","х":"x","і":"i","ј":"j",
-      "ѕ":"s","ԁ":"d","һ":"h","ӏ":"l","в":"b","к":"k","м":"m","н":"h","т":"t",
-      "α":"a","ο":"o","ρ":"p","ν":"v","ε":"e","ι":"i","κ":"k","μ":"u","τ":"t",
-      "γ":"y","χ":"x","β":"b","θ":"o","σ":"o","ϲ":"c","ѡ":"w","ѵ":"v"
-    };
-    const normName = (s) => String(s ?? "")
-      .normalize("NFKC")
-      // ký tự vô hình: không chiếm chỗ trên màn hình nhưng đổi chuỗi byte
-      .replace(/[​-‍⁠﻿­]/g, "")
-      .toLowerCase()
-      .replace(/./g, (c) => CONFUSABLES[c] || c)
-      .normalize("NFD").replace(/[̀-ͯ]/g, "")   // bỏ dấu tiếng Việt
-      .replace(/đ/g, "d")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    function activeContractAddress() {
-      const o = localStorage.getItem(KEY_CONTRACT);
-      return (o && ethers.isAddress(o)) ? o : CONTRACT_ADDRESS;
-    }
-    const isOverridden = () =>
-      activeContractAddress().toLowerCase() !== CONTRACT_ADDRESS.toLowerCase();
-
-    function renderAnchor() {
-      $("anchorAddr").textContent = CONTRACT_ADDRESS;
-      $("anchorChain").textContent = EXPECTED_CHAIN_ID.toString();
-      const ov = isOverridden();
-      $("overrideBanner").classList.toggle("hidden", !ov);
-      if (ov) $("overrideAddr").textContent = activeContractAddress();
-    }
-
-    function readJSON(key, fallback) {
-      try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
-      catch { return fallback; }
-    }
-    function writeJSON(key, val) {
-      try { localStorage.setItem(key, JSON.stringify(val)); } catch { }
-    }
-
-    /* banner() nhận HTML — CHỈ dùng với chuỗi tĩnh do ta tự viết, hoặc đã esc() ở nơi gọi. */
-    function banner(target, text, isError) {
-      $(target).innerHTML =
-        '<div class="banner' + (isError ? " err" : "") + '" style="margin:18px 0 0">' + text + "</div>";
-    }
-    
-    function bannerText(target, text, isError) {
-      const box = document.createElement("div");
-      box.className = "banner" + (isError ? " err" : "");
-      box.style.margin = "18px 0 0";
-      box.textContent = text;
-      const host = $(target);
-      host.textContent = "";
-      host.appendChild(box);
-    }
-
-    /* ---------- nhật ký bằng chứng ---------- */
-    function logEntry(entry) {
-      const all = readJSON(KEY_LEDGER, []);
-      all.unshift(Object.assign({ at: new Date().toISOString() }, entry));
-      writeJSON(KEY_LEDGER, all.slice(0, 200));
-      renderLedger();
-    }
-
-    function renderLedger() {
-      const all = readJSON(KEY_LEDGER, []);
-      $("ledgerCount").textContent = all.length + " mục";
-      if (!all.length) {
-        $("ledgerBody").innerHTML =
-          '<p class="empty">Mọi giao dịch và thao tác bị chặn sẽ được ghi lại ở đây kèm mã giao dịch, số block và lượng gas.</p>';
-        return;
-      }
-      $("ledgerBody").innerHTML = all.map((e) => {
-        const rows = [];
-        if (e.txHash) rows.push(["Tx", short(e.txHash, 12, 10)]);
-        if (e.block != null) rows.push(["Block", e.block]);
-        if (e.gas) rows.push(["Gas", e.gas]);
-        if (e.certId) rows.push(["certId", short(e.certId, 12, 10)]);
-        if (e.detail) rows.push(["Chi tiết", esc(e.detail)]);
-        if (e.reason) rows.push(["Lý do", esc(e.reason)]);
-        return '<div class="entry"><div class="entry-top">' +
-          '<span class="entry-op' + (e.ok === false ? " fail" : "") + '">' +
-          (e.ok === false ? "✕ " : "") + esc(e.op) + "</span>" +
-          '<span class="entry-time">' + new Date(e.at).toLocaleTimeString("vi-VN") + "</span></div>" +
-          (rows.length ? "<dl>" + rows.map(([k, v]) => "<dt>" + k + "</dt><dd>" + v + "</dd>").join("") + "</dl>" : "") +
-          "</div>";
-      }).join("");
-    }
-
-    function exportEvidence() {
-      const all = readJSON(KEY_LEDGER, []).slice().reverse();
-      if (!all.length) { alert("Nhật ký đang trống. Hãy thực hiện vài thao tác trước."); return; }
-      let md = "# EVIDENCE — CredVerify MVP (kiến trúc V2, sổ đăng ký dùng chung)\n\n";
-      md += "- Contract address: `" + (contractAddress || CONTRACT_ADDRESS) + "`\n";
-      md += "- chainId kỳ vọng: `" + EXPECTED_CHAIN_ID + "`\n";
-      md += "- Tài khoản thao tác: `" + (account || "chưa kết nối") + "`\n";
-      md += "- Xuất lúc: " + new Date().toISOString() + "\n\n";
-      md += "> Nhật ký do giao diện CredVerify ghi lại. Đối chiếu bằng `npx hardhat console` hoặc log của `npx hardhat node`.\n\n";
-      md += "## Nhật ký thao tác\n\n";
-      md += "| # | Thời điểm | Thao tác | Kết quả | Tx hash | Block | Gas | Ghi chú |\n|---|---|---|---|---|---|---|---|\n";
-      all.forEach((e, i) => {
-        md += "| " + (i + 1) + " | " + e.at + " | " + e.op + " | " +
-          (e.ok === false ? "BỊ CHẶN" : "Thành công") + " | " +
-          (e.txHash ? "`" + e.txHash + "`" : "—") + " | " +
-          (e.block != null ? e.block : "—") + " | " + (e.gas || "—") + " | " +
-          (e.reason || e.detail || "—") + " |\n";
-      });
-      md += "\n## Ghi chú\n\n- Không đưa private key, seed phrase hay dữ liệu cá nhân thật vào tệp này.\n";
-      md += "- Bổ sung thủ công: phiên bản compiler, deployment transaction, kết quả `npx hardhat test`.\n";
-      const blob = new Blob([md], { type: "text/markdown" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = "EVIDENCE.md";
-      a.click();
-      URL.revokeObjectURL(a.href);
-    }
-
-    /* ---------- băm tệp ---------- */
-    async function hashFile(file) {
-      const buf = await file.arrayBuffer();
-      return ethers.keccak256(new Uint8Array(buf));
-    }
-    function wireFileInput(inputId, outId, store) {
-      $(inputId).addEventListener("change", async (ev) => {
-        const f = ev.target.files[0];
-        if (!f) return;
-        try {
-          const h = await hashFile(f);
-          store.hash = h; store.name = f.name;
-          // esc(f.name): tên tệp do NGƯỜI NGOÀI cung cấp (ứng viên gửi hồ sơ). FE-01.
-          $(outId).innerHTML = "Hash tệp <b>" + esc(f.name) + "</b>: <span class='mono'>" + short(h, 14, 12) + "</span>";
-          if (inputId === "isFile") renderIssueCertId();
-        } catch (e) {
-          $(outId).textContent = "Không đọc được tệp: " + e.message;
-        }
-      });
-    }
-    const issueFile = { hash: null, name: null };
-    const verifyFile = { hash: null, name: null };
-
-    // DANH BẠ ĐƠN VỊ PHÁT HÀNH 
-
-    let DIR = { addrs: [], names: [], recognizedAt: {}, predecessor: {}, loadedAt: 0 };
-
-    async function loadDirectory(force) {
-      const c = reader();
-      if (!c) return DIR;
-      if (!force && DIR.loadedAt && Date.now() - DIR.loadedAt < 30000) return DIR;
-      const [addrs, names] = await c.listActiveIssuers();
-      DIR.addrs = [...addrs]; DIR.names = [...names];
-
-      // Thời điểm được công nhận + chuỗi kế nhiệm, dựng từ event.
-      DIR.recognizedAt = {}; DIR.predecessor = {};
-      try {
-        const added = await queryLogsChunked(c, c.filters.IssuerAdded());
-        const blockTime = {};
-        for (const lg of added) {
-          if (blockTime[lg.blockNumber] == null) {
-            const b = await (c.runner?.provider || readProvider).getBlock(lg.blockNumber);
-            blockTime[lg.blockNumber] = b ? Number(b.timestamp) : 0;
-          }
-          DIR.recognizedAt[lg.args.issuerAddress.toLowerCase()] = blockTime[lg.blockNumber];
-        }
-        const inh = await queryLogsChunked(c, c.filters.IssuerInherited());
-        for (const lg of inh) {
-          DIR.predecessor[lg.args.newIssuer.toLowerCase()] = lg.args.oldIssuer.toLowerCase();
-        }
-      } catch { }
-      DIR.loadedAt = Date.now();
-      return DIR;
-    }
-
-    /* Đời thứ mấy trong chuỗi kế nhiệm. Contract chặn ở 8 hop; sau đó chứng chỉ do
-       khóa đời đầu cấp không còn ai thu hồi được */
-    function generationOf(addr) {
-      let n = 0, cur = String(addr).toLowerCase();
-      while (DIR.predecessor[cur] && n < 32) { cur = DIR.predecessor[cur]; n++; }
-      return n;
-    }
-
-    /* Các cặp tên TRÙNG NHAU SAU CHUẨN HÓA. Contract không bắt được, trang này bắt được. */
-    function normalizedCollisions() {
-      const byNorm = {};
-      DIR.addrs.forEach((a, i) => {
-        const k = normName(DIR.names[i]);
-        (byNorm[k] = byNorm[k] || []).push({ addr: a, name: DIR.names[i] });
-      });
-      return Object.values(byNorm).filter((g) => g.length > 1);
-    }
-
-    async function fillIssuerSelect() {
-      const sel = $("vfIssuer");
-      const keep = sel.value;
-      sel.innerHTML = '<option value="">Tôi không biết — tra tất cả đơn vị</option>';
-      DIR.addrs.forEach((a, i) => {
-        const o = document.createElement("option");
-        o.value = a;
-        o.textContent = DIR.names[i] + " (" + short(a, 8, 6) + ")";  // textContent -> an toàn
-        sel.appendChild(o);
-      });
-      if (keep) sel.value = keep;
-    }
-
-    /* ---------- kết nối ---------- */
-    async function connect() {
-      if (!window.ethereum) {
-        banner("issueOut", "Không tìm thấy ví trong trình duyệt. Cài ví rồi tải lại trang.", true);
-        return;
-      }
-      contractAddress = activeContractAddress();
-      if (!ethers.isAddress(contractAddress)) {
-        banner("issueOut", "Địa chỉ contract trong cấu hình không hợp lệ.", true); return;
-      }
-      provider = new ethers.BrowserProvider(window.ethereum);
-
-      const net = await provider.getNetwork();
-      if (net.chainId !== EXPECTED_CHAIN_ID) {
-        banner("issueOut", "Sai mạng: ví đang ở chainId " + net.chainId +
-          ", hệ thống yêu cầu " + EXPECTED_CHAIN_ID + ". Đổi mạng trong ví rồi kết nối lại.", true);
-        return;
-      }
-
-      const code = await provider.getCode(contractAddress);
-      if (code === "0x") {
-        banner("issueOut", "Không có contract nào tại địa chỉ này trên mạng đang chọn.", true); return;
-      }
-
-      await provider.send("eth_requestAccounts", []);
-      signer = await provider.getSigner();
-      account = await signer.getAddress();
-      contract = new ethers.Contract(contractAddress, ABI, signer);
-
-      $("chipNet").innerHTML = "<b>Mạng</b> " + esc(net.name) + " · chainId " + net.chainId;
-      $("chipAcct").textContent = short(account, 8, 6);
-
-      let role = "Người xác minh";
-      try {
-        const [own, st] = await Promise.all([contract.owner(), contract.issuerStatus(account)]);
-        if (own.toLowerCase() === account.toLowerCase()) role = "Đơn vị vận hành (owner)";
-        else if (Number(st) === 1) role = "Đơn vị phát hành";
-        else if (Number(st) === 2) role = "Đơn vị đã bị vô hiệu hóa";
-      } catch {
-        banner("issueOut", "Kết nối được ví nhưng không đọc được contract. Kiểm tra địa chỉ và mạng.", true);
-        return;
-      }
-      $("chipRole").innerHTML = "<b>Vai trò</b> " + esc(role);
-      $("setupBanner").classList.add("hidden");
-      logEntry({ op: "Kết nối ví", detail: role + " · " + short(account, 8, 6) });
-      renderIssueCertId();
-      await refreshAll(true);
-    }
-
-    function reasonOf(err) {
-      return err?.reason || err?.shortMessage || err?.info?.error?.message || err?.message || "Không rõ nguyên nhân";
-    }
-
-  
-    function setWrongChain(id) {
-      $("chainNow").textContent = id.toString();
-      $("chainWant").textContent = EXPECTED_CHAIN_ID.toString();
-      $("chainBanner").classList.remove("hidden");
-      $("chipNet").innerHTML =
-        "<b>Mạng</b> <span style='color:var(--seal);font-weight:500'>SAI · chainId " + id + "</span>";
-      $("chipRole").innerHTML = "<b>Vai trò</b> —";
-    }
-
-    function dropWriteAccess() {
-      signer = null;
-      contract = null;
-    }
-
-    function wireWalletEvents() {
-      if (!window.ethereum || window.ethereum.__credverifyWired) return;
-      window.ethereum.__credverifyWired = true;
-
-      window.ethereum.on("chainChanged", (hexChainId) => {
-        let id;
-        try { id = BigInt(hexChainId); } catch { id = -1n; }
-        dropWriteAccess();
-        if (id === EXPECTED_CHAIN_ID) {
-          $("chainBanner").classList.add("hidden");
-          $("chipNet").innerHTML = "<b>Mạng</b> chainId " + id;
-          $("chipAcct").textContent = "chưa kết nối";
-          banner("issueOut", "Ví đã quay lại đúng mạng. Bấm <b>Kết nối ví</b> để nối lại.");
-        } else {
-          setWrongChain(id);
-        }
-        logEntry({
-          op: "Ví đổi mạng", ok: id !== EXPECTED_CHAIN_ID,
-          reason: id === EXPECTED_CHAIN_ID
-            ? "" : "chainId " + id + " — đã ngắt toàn bộ quyền ghi",
-          detail: "chainId " + id,
-        });
-      });
-
-      window.ethereum.on("accountsChanged", (accs) => {
-        dropWriteAccess();
-        const next = accs && accs.length ? accs[0] : null;
-        account = null;
-        $("chipAcct").textContent = next ? short(next, 8, 6) : "chưa kết nối";
-        $("chipRole").innerHTML = "<b>Vai trò</b> —";
-        banner("adminOut", next
-          ? "Ví đã đổi sang <span class='mono'>" + esc(short(next, 8, 6)) +
-            "</span>. Bấm <b>Kết nối ví</b> để nạp lại vai trò trước khi thao tác."
-          : "Ví đã ngắt kết nối khỏi trang này.", true);
-        logEntry({ op: "Ví đổi tài khoản", detail: next ? short(next, 8, 6) : "ngắt kết nối" });
-      });
-    }
-
-    /* ---------- cấp ---------- */
-    function renderIssueCertId() {
-      if (!account || !issueFile.hash) return;
-      const id = certIdOf(account, issueFile.hash);
-      $("isCertIdBox").innerHTML =
-        "Mã bản ghi sẽ là <span class='mono' style='font-size:12px'>" + esc(short(id, 14, 12)) + "</span>" +
-        "<div style='margin-top:6px;font-size:12.5px;color:var(--ink-soft)'>" +
-        "= keccak256(ví của bạn ‖ hash tệp). Tính ngay tại máy này, không cần hỏi chuỗi.</div>";
-    }
-
-    async function doIssue() {
-      if (!contract) { banner("issueOut", "Hãy kết nối ví trước.", true); return; }
-      const holder = $("isHolder").value.trim();
-      if (!issueFile.hash) { banner("issueOut", "Chưa chọn tệp chứng chỉ.", true); return; }
-      if (!ethers.isAddress(holder)) { banner("issueOut", "Địa chỉ ví học viên không hợp lệ.", true); return; }
-
-      const certId = certIdOf(account, issueFile.hash);
-      $("btnIssue").disabled = true;
-      banner("issueOut", "Đang gửi giao dịch, xác nhận trong ví…");
-      try {
-        const tx = await contract.issueCertificate(issueFile.hash, holder);
-        const rc = await tx.wait();
-
-        const store = readJSON(KEY_STORE, {});
-        store[certId] = {
-          certId, hash: issueFile.hash, file: issueFile.name, holder,
-          name: $("isName").value.trim(), course: $("isCourse").value.trim(),
-          issuer: account, txHash: rc.hash
-        };
-        writeJSON(KEY_STORE, store);
-
-        logEntry({
-          op: "Cấp chứng chỉ", txHash: rc.hash, block: rc.blockNumber,
-          gas: rc.gasUsed.toString(), certId, detail: issueFile.name || ""
-        });
-        banner("issueOut", "Đã cấp chứng chỉ cho tệp <b>" + esc(issueFile.name || "") +
-          "</b>. Xem mã giao dịch ở nhật ký bên phải.");
-        renderList();
-      } catch (err) {
-        const r = reasonOf(err);
-        logEntry({ op: "Cấp chứng chỉ", ok: false, certId, reason: r });
-        bannerText("issueOut", "Giao dịch bị chặn: " + r, true);
-      } finally {
-        $("btnIssue").disabled = false;
-      }
-    }
-
-    /* =====================================================================
-       XÁC MINH
-       ===================================================================== */
-
-    function issuerAgeNote(issuerAddr, issuedAt) {
-      const rec = DIR.recognizedAt[String(issuerAddr).toLowerCase()];
-      if (!rec || !issuedAt) return null;
-      const gap = Number(issuedAt) - Number(rec);
-      if (gap < 0) return null;
-      const d = Math.floor(gap / 86400), h = Math.floor(gap / 3600), m = Math.floor(gap / 60);
-      const human = d >= 1 ? d + " ngày" : (h >= 1 ? h + " giờ" : m + " phút");
-      return {
-        text: "Đơn vị này được công nhận ngày " +
-          new Date(rec * 1000).toLocaleDateString("vi-VN") +
-          " — " + human + " trước khi cấp chứng chỉ này.",
-        suspicious: gap < 86400
-      };
-    }
-
-    async function doVerify() {
-      const c = reader();
-      if (!c) { banner("verifyOut", "Không kết nối được tới mạng blockchain. Kiểm tra RPC.", true); return; }
-      if (!verifyFile.hash) { banner("verifyOut", "Chưa chọn tệp cần kiểm tra.", true); return; }
-
-      const chosen = $("vfIssuer").value;
-      try { await loadDirectory(false); } catch { }
-
-      try {
-        if (chosen && ethers.isAddress(chosen)) {
-          // ĐƯỜNG O(1): đã biết đơn vị -> tra thẳng, không quét danh sách.
-          const r = await c.verifyCertificate(chosen, verifyFile.hash);
-          renderVerdict(chosen, r.issuerDisplayName, Number(r.status), r.valid,
-            r.holder, Number(r.issuedAt), Number(r.revokedAt), Number(r.issuerState),
-            certIdOf(chosen, verifyFile.hash), false);
-          logEntry({ op: "Xác minh (biết đơn vị)", certId: certIdOf(chosen, verifyFile.hash),
-            detail: "chỉ đọc, một lời gọi view, không phát sinh giao dịch" });
-          return;
-        }
-
-        // ĐƯỜNG DỰ PHÒNG O(n): không biết đơn vị -> quét toàn bộ danh sách trên chuỗi.
-        const [issuers, ids, statuses] = await c.findByHash(verifyFile.hash);
-        if (!issuers.length) {
-          $("verifyOut").innerHTML =
-            '<div class="verdict none"><h3>Không tìm thấy</h3>' +
-            "<p>Không đơn vị nào đăng ký tệp này. Tệp có thể chưa từng được cấp, " +
-            "hoặc nội dung đã bị chỉnh sửa so với bản gốc.</p><dl>" +
-            "<dt>Hash bạn nộp</dt><dd>" + esc(short(verifyFile.hash, 14, 12)) + "</dd></dl></div>";
-          logEntry({ op: "Xác minh (tra toàn bộ)", detail: "không tìm thấy bản ghi khớp" });
-          return;
-        }
-        if (issuers.length > 1) {
-          banner("verifyOut", "<b>Tệp này được " + issuers.length + " đơn vị khác nhau đăng ký.</b> " +
-            "Hãy chọn đúng đơn vị đã cấp trong ô phía trên rồi xác minh lại — mỗi đơn vị có một " +
-            "bản ghi độc lập, và việc một đơn vị khác cũng đăng ký tệp này <b>không</b> làm bản ghi " +
-            "của đơn vị thật mất hiệu lực.", true);
-          logEntry({ op: "Xác minh (tra toàn bộ)", ok: false,
-            reason: issuers.length + " đơn vị cùng đăng ký tệp này" });
-          return;
-        }
-        const r = await c.verifyCertificate(issuers[0], verifyFile.hash);
-        renderVerdict(issuers[0], r.issuerDisplayName, Number(r.status), r.valid,
-          r.holder, Number(r.issuedAt), Number(r.revokedAt), Number(r.issuerState), ids[0], true);
-        logEntry({ op: "Xác minh (tra toàn bộ)", certId: ids[0], detail: "chỉ đọc, không phát sinh giao dịch" });
-      } catch (err) {
-        bannerText("verifyOut", "Không đọc được dữ liệu: " + reasonOf(err), true);
-      }
-    }
-
-    function renderVerdict(issuer, issuerNameStr, status, valid, holder, issuedAt, revokedAt, issuerState, certId, scanned) {
-      let cls, title, msg;
-      if (valid)          { cls = "valid";   title = "Chứng chỉ hợp lệ";
-        msg = "Tệp khớp với bản ghi trên chuỗi và chứng chỉ còn hiệu lực."; }
-      else if (status === 0) { cls = "none"; title = "Không tìm thấy";
-        msg = "Đơn vị này chưa từng đăng ký tệp có nội dung như vậy."; }
-      else                { cls = "invalid"; title = "Đã bị thu hồi";
-        msg = "Đơn vị phát hành đã thu hồi chứng chỉ này. Thu hồi là vĩnh viễn."; }
-
-      const age = status !== 0 ? issuerAgeNote(issuer, issuedAt) : null;
-      const gen = generationOf(issuer);
-
-      let extra = "";
-      if (age) {
-        extra += '<div class="banner' + (age.suspicious ? " err" : "") + '" style="margin:14px 0 0">' +
-          (age.suspicious ? "<b>Đáng ngờ — </b>" : "") + esc(age.text) +
-          (age.suspicious
-            ? " Một đơn vị vừa được công nhận đã cấp bằng ngay có thể hoàn toàn hợp lệ, nhưng cũng là " +
-              "dấu hiệu của một ví được thêm vào chỉ để cấp tấm bằng này. Hãy đối chiếu với đơn vị đào tạo."
-            : "") + "</div>";
-      }
-      if (issuerState === 2) {
-        extra += '<div class="banner" style="margin:14px 0 0"><b>Đơn vị cấp nay đã bị vô hiệu hóa.</b> ' +
-          "Chứng chỉ đã cấp hợp lệ thì vẫn hợp lệ — đơn vị vận hành không có quyền viết lại quá khứ. " +
-          "Nhưng bạn nên biết điều này khi cân nhắc.</div>";
-      }
-      if (gen > 0) {
-        extra += '<div class="banner" style="margin:14px 0 0">Khóa cấp này là <b>đời thứ ' + gen +
-          "/8</b> trong chuỗi chuyển giao của đơn vị.</div>";
-      }
-      if (scanned) {
-        extra += '<div class="banner" style="margin:14px 0 0">Đơn vị cấp được tìm bằng cách quét ' +
-          "toàn bộ danh sách. Lần sau chọn đúng đơn vị ở ô trên sẽ nhanh hơn.</div>";
-      }
-
-      $("verifyOut").innerHTML =
-        '<div class="verdict ' + cls + '"><h3>' + title + "</h3><p>" + msg + "</p><dl>" +
-        "<dt>Trạng thái</dt><dd><span class='status-tag " + STATUS_CLASS[status] + "'>" +
-          STATUS_LABEL[status] + "</span></dd>" +
-        (status !== 0 ? "<dt>Đơn vị cấp</dt><dd>" + esc(issuerNameStr || "(không tên)") + "</dd>" : "") +
-        (status !== 0 ? "<dt>Ví đơn vị</dt><dd>" + esc(issuer) + "</dd>" : "") +
-        (status !== 0 ? "<dt>Ví học viên</dt><dd>" + esc(holder) + "</dd>" : "") +
-        (issuedAt ? "<dt>Ngày cấp</dt><dd>" + new Date(issuedAt * 1000).toLocaleString("vi-VN") + "</dd>" : "") +
-        (revokedAt ? "<dt>Ngày thu hồi</dt><dd>" + new Date(revokedAt * 1000).toLocaleString("vi-VN") + "</dd>" : "") +
-        "<dt>Hash bạn nộp</dt><dd>" + esc(short(verifyFile.hash, 14, 12)) + "</dd>" +
-        "<dt>Mã bản ghi</dt><dd>" + esc(short(certId, 14, 12)) + "</dd>" +
-        "</dl></div>" + extra;
-    }
-
-    /* ---------- chứng chỉ của tôi ---------- */
-    async function renderMine(writeLog) {
-      const typed = ($("mineAddr").value || "").trim();
-      const who = typed || account;
-      const c = reader();
-      if (!c) { $("mineOut").innerHTML = '<p class="empty">Không kết nối được tới mạng blockchain.</p>'; return; }
-      if (!who || !ethers.isAddress(who)) {
-        $("mineOut").innerHTML = '<p class="empty">Nhập địa chỉ ví học viên, hoặc kết nối ví.</p>'; return;
-      }
-      $("mineOut").innerHTML = '<p class="empty">Đang đọc dữ liệu từ chuỗi…</p>';
-      try {
-        await loadDirectory(false);
-        // CertificateIssued(certId, indexed certHash, indexed issuer, indexed holder, issuedAt)
-        const filter = c.filters.CertificateIssued(null, null, null, who);
-        const logs = (await queryLogsChunked(c, filter))
-          .filter((l) => (l.args.holder || "").toLowerCase() === who.toLowerCase());
-        if (!logs.length) {
-          $("mineOut").innerHTML = '<p class="empty">Ví này chưa được cấp chứng chỉ nào.</p>'; return;
-        }
-        const store = readJSON(KEY_STORE, {});
-        let rows = "";
-        for (const lg of logs) {
-          const certId = lg.args.certId;
-          const issuedAt = Number(lg.args.issuedAt);
-          const meta = store[certId] || null;
-          let s = 0, nm = "";
-          try { s = Number((await c.getCertificate(certId)).status); } catch { }
-          try { nm = await c.issuerName(lg.args.issuer); } catch { }
-          rows += "<tr><td>" + (meta && meta.file ? "<b>" + esc(meta.file) + "</b><br>" : "") +
-            "<span class='mono' style='font-size:11.5px;color:var(--ink-soft)'>" + esc(short(certId, 10, 8)) + "</span></td>" +
-            "<td>" + esc(nm || "(không tên)") + "<br><span class='mono' style='font-size:11.5px;color:var(--ink-soft)'>" +
-            esc(short(lg.args.issuer, 8, 6)) + "</span></td>" +
-            "<td>" + (issuedAt ? new Date(issuedAt * 1000).toLocaleDateString("vi-VN") : "—") + "</td>" +
-            "<td><span class='status-tag " + STATUS_CLASS[s] + "'>" + STATUS_LABEL[s] + "</span></td></tr>";
-        }
-        $("mineOut").innerHTML =
-          "<table><thead><tr><th>Chứng chỉ</th><th>Đơn vị cấp</th><th>Ngày cấp</th><th>Trạng thái</th></tr></thead><tbody>" +
-          rows + "</tbody></table>";
-        if (writeLog) logEntry({ op: "Xem chứng chỉ của tôi",
-          detail: logs.length + " chứng chỉ của " + short(who, 8, 6) + " (chỉ đọc)" });
-      } catch (err) {
-        bannerText("mineOut", "Không đọc được dữ liệu từ chuỗi: " + reasonOf(err), true);
-      }
-    }
-
-    /* ---------- danh sách & thu hồi ---------- */
-    async function renderList() {
-      const store = readJSON(KEY_STORE, {});
-      const keys = Object.keys(store);
-      if (!keys.length) {
-        $("listOut").innerHTML = '<p class="empty">Chưa có chứng chỉ nào được cấp từ trình duyệt này.</p>'; return;
-      }
-      const c = reader();
-      let rows = "";
-      for (const id of keys) {
-        const rec = store[id];
-        let status = "—", tag = "t-none";
-        if (c) {
-          try {
-            const s = Number((await c.getCertificate(id)).status);
-            status = STATUS_LABEL[s]; tag = STATUS_CLASS[s];
-          } catch { }
-        }
-        rows += "<tr><td><b>" + esc(rec.file || "(không rõ tệp)") + "</b><br>" +
-          "<span class='mono' style='font-size:11.5px;color:var(--ink-soft)'>" + esc(short(id, 10, 8)) + "</span></td>" +
-          "<td>" + esc(rec.name || "—") + "<br><span style='font-size:12px;color:var(--ink-soft)'>" +
-          esc(rec.course || "—") + "</span></td>" +
-          "<td><span class='status-tag " + tag + "'>" + esc(status) + "</span></td>" +
-          "<td><button class='small ghost' data-revoke='" + esc(id) + "'>Thu hồi</button></td></tr>";
-      }
-      $("listOut").innerHTML =
-        "<table><thead><tr><th>Tệp chứng chỉ</th><th>Học viên (off-chain)</th><th>Trạng thái</th><th></th></tr></thead><tbody>" +
-        rows + "</tbody></table>";
-      document.querySelectorAll("[data-revoke]").forEach((b) => {
-        b.addEventListener("click", () => doRevoke(b.getAttribute("data-revoke")));
-      });
-    }
-
-    async function doRevoke(certId) {
-      if (!contract) { alert("Hãy kết nối ví trước — thu hồi là thao tác ghi."); return; }
-      if (!confirm("Thu hồi chứng chỉ này?\n\nThu hồi là VĨNH VIỄN. Cùng tệp đó sẽ không cấp lại được.")) return;
-      try {
-        const tx = await contract.revokeCertificate(certId);
-        const rc = await tx.wait();
-        logEntry({ op: "Thu hồi chứng chỉ", txHash: rc.hash, block: rc.blockNumber,
-          gas: rc.gasUsed.toString(), certId });
-        renderList();
-      } catch (err) {
-        const r = reasonOf(err);
-        logEntry({ op: "Thu hồi chứng chỉ", ok: false, certId, reason: r });
-        alert("Thu hồi bị chặn: " + r);
-      }
-    }
-
-    /* ---------- danh bạ đơn vị phát hành ---------- */
-    async function renderDirectory() {
-      const c = reader();
-      if (!c) { $("dirOut").innerHTML = '<p class="empty">Không kết nối được tới mạng blockchain.</p>'; return; }
-      try {
-        await loadDirectory(true);
-        await fillIssuerSelect();
-
-        // Cảnh báo tên trùng nhau SAU CHUẨN HÓA — thứ contract không bắt được.
-        const cols = normalizedCollisions();
-        $("dupWarn").innerHTML = cols.length
-          ? '<div class="banner err" style="margin:0 0 16px"><b>Cảnh báo: có ' + cols.length +
-            " nhóm tên gần giống nhau.</b> Contract chỉ chặn trùng tên y hệt theo byte. " +
-            "Những cặp dưới đây khác nhau về byte nhưng trông giống nhau trên màn hình — " +
-            "hãy đối chiếu <b>địa chỉ ví</b>, đừng chỉ đọc tên." +
-            cols.map((g) => "<div class='mono' style='font-size:12px;margin-top:6px'>" +
-              g.map((x) => esc(x.name) + "  " + esc(short(x.addr, 8, 6))).join("<br>") + "</div>").join("") +
-            "</div>"
-          : "";
-
-        if (!DIR.addrs.length) {
-          $("dirOut").innerHTML = '<p class="empty">Chưa có đơn vị nào được công nhận.</p>';
-        } else {
-          let rows = "";
-          DIR.addrs.forEach((a, i) => {
-            const rec = DIR.recognizedAt[a.toLowerCase()];
-            const gen = generationOf(a);
-            rows += "<tr><td><b>" + esc(DIR.names[i]) + "</b></td>" +
-              "<td class='mono' style='font-size:11.5px'>" + esc(a) + "</td>" +
-              "<td>" + (rec ? new Date(rec * 1000).toLocaleDateString("vi-VN") : "—") + "</td>" +
-              "<td>" + (gen > 0 ? "đời thứ " + gen + "/8" : "khóa gốc") + "</td></tr>";
-          });
-          $("dirOut").innerHTML =
-            "<table><thead><tr><th>Tên đơn vị</th><th>Ví</th><th>Được công nhận</th><th>Chuỗi khóa</th></tr></thead><tbody>" +
-            rows + "</tbody></table>" +
-            "<p class='note'>Con số <b>" + DIR.addrs.length + " đơn vị</b> phải khớp với số đơn vị " +
-            "CredVerify <b>chủ động</b> công nhận. Nhiều hơn nghĩa là có đơn vị được thêm mà không ai biết.</p>";
-        }
-        await renderAudit();
-      } catch (err) {
-        bannerText("dirOut", "Không đọc được danh bạ: " + reasonOf(err), true);
-      }
-    }
-
-    /* Nhật ký quản trị */
-    async function renderAudit() {
-      const c = reader();
-      if (!c) return;
-      try {
-        const evs = [];
-        const push = (logs, kind, fmt) => logs.forEach((l) =>
-          evs.push({ b: l.blockNumber, tx: l.transactionHash, kind, text: fmt(l) }));
-        push(await queryLogsChunked(c, c.filters.IssuerAdded()), "Công nhận",
-          (l) => l.args.name + " → " + l.args.issuerAddress);
-        push(await queryLogsChunked(c, c.filters.IssuerRemoved()), "Gỡ quyền",
-          (l) => String(l.args.issuerAddress));
-        push(await queryLogsChunked(c, c.filters.IssuerRestored()), "Bật lại",
-          (l) => String(l.args.issuerAddress));
-        push(await queryLogsChunked(c, c.filters.IssuerInherited()), "Chuyển giao",
-          (l) => l.args.name + ": " + short(l.args.oldIssuer, 8, 6) + " → " + short(l.args.newIssuer, 8, 6));
-        push(await queryLogsChunked(c, c.filters.OwnershipTransferred()), "Đổi owner",
-          (l) => short(l.args.from, 8, 6) + " → " + short(l.args.to, 8, 6));
-
-        if (!evs.length) { $("auditOut").innerHTML = '<p class="empty">Chưa có thao tác quản trị nào.</p>'; return; }
-        evs.sort((x, y) => y.b - x.b);
-        $("auditOut").innerHTML =
-          "<table><thead><tr><th>Block</th><th>Thao tác</th><th>Chi tiết</th><th>Tx</th></tr></thead><tbody>" +
-          evs.map((e) => "<tr><td>" + e.b + "</td><td>" + esc(e.kind) + "</td>" +
-            "<td class='mono' style='font-size:11.5px'>" + esc(e.text) + "</td>" +
-            "<td class='mono' style='font-size:11.5px'>" + esc(short(e.tx, 10, 8)) + "</td></tr>").join("") +
-          "</tbody></table>";
-      } catch { $("auditOut").innerHTML = '<p class="empty">Không đọc được nhật ký quản trị.</p>'; }
-    }
-
-    /* ---------- quản trị ---------- */
-    async function govTx(label, fn, detail) {
-      if (!contract) { banner("adminOut", "Hãy kết nối ví trước — đây là thao tác ghi.", true); return; }
-      try {
-        const tx = await fn();
-        const rc = await tx.wait();
-        logEntry({ op: label, txHash: rc.hash, block: rc.blockNumber, gas: rc.gasUsed.toString(), detail: detail || "" });
-        banner("adminOut", esc(label) + " thành công.");
-        await refreshAll(true);
-      } catch (err) {
-        const r = reasonOf(err);
-        logEntry({ op: label, ok: false, reason: r, detail: detail || "" });
-        bannerText("adminOut", "Bị chặn: " + r, true);
-      }
-    }
-
-    async function renderGovernance() {
-      const c = reader();
-      if (!c) { $("govBox").textContent = "Không kết nối được tới mạng blockchain."; return; }
-      try {
-        const g = await c.governance();
-        const me = account ? account.toLowerCase() : null;
-        const isOwner = me && g.owner_.toLowerCase() === me;
-        $("govBox").className = "banner";
-        $("govBox").innerHTML =
-          "<span class='mono' style='font-size:12px'>" +
-          "owner  " + esc(g.owner_) +
-          (g.pendingOwner_ !== ethers.ZeroAddress ? "  (chờ nhận: " + esc(g.pendingOwner_) + ")" : "") +
-          "</span><br>" +
-          "<b>" + g.activeIssuerCount_ + "</b> đơn vị đang hoạt động · <b>" +
-          g.knownIssuerCount_ + "</b> địa chỉ từng được công nhận" +
-          (isOwner ? "<br>Ví đang kết nối là <b>owner</b>." :
-            (me ? "<br>Ví đang kết nối <b>không phải</b> owner — các nút dưới sẽ bị contract từ chối." : ""));
-      } catch (err) {
-        bannerText("govBox", "Không đọc được trạng thái quản trị: " + reasonOf(err), true);
-      }
-    }
-
-    async function adminAction(kind) {
-      const addr = $("adAddr").value.trim();
-      const name = $("adName").value.trim();
-      if (!ethers.isAddress(addr)) { banner("adminOut", "Địa chỉ ví không hợp lệ.", true); return; }
-
-      if (kind === "check") {
-        const c = reader();
-        if (!c) { banner("adminOut", "Không kết nối được tới mạng blockchain.", true); return; }
-        try {
-          const [st, nm, inh] = await Promise.all([
-            c.issuerStatus(addr), c.issuerName(addr), c.inheritedBy(addr)]);
-          banner("adminOut",
-            "Trạng thái: <b>" + esc(ISSUER_LABEL[Number(st)]) + "</b>" +
-            (nm ? "<br>Tên: <b>" + esc(nm) + "</b>" : "") +
-            (inh !== ethers.ZeroAddress ? "<br>Đã chuyển giao cho: <span class='mono'>" + esc(inh) + "</span>" : ""));
-          logEntry({ op: "Kiểm tra đơn vị", detail: short(addr, 8, 6) + " → " + ISSUER_LABEL[Number(st)] });
-        } catch (err) { bannerText("adminOut", reasonOf(err), true); }
-        return;
-      }
-
-      if (kind === "add") {
-        if (!name) { banner("adminOut", "Chưa nhập tên hiển thị.", true); return; }
-        // Cảnh báo TRƯỚC KHI gửi giao dịch 
-        try {
-          await loadDirectory(true);
-          const n = normName(name);
-          const pairs = DIR.addrs.map((a, i) => ({ a, nm: DIR.names[i] }));
-          const near = pairs.filter((x) => x.nm !== name && normName(x.nm) === n);
-          if (near.length && !confirm(
-            "Tên bạn sắp đăng ký TRÔNG GIỐNG một đơn vị đã có, nhưng khác nhau về byte:\n\n" +
-            near.map((x) => "  đã có:      " + JSON.stringify(x.nm) +
-                            "\n  bạn đang gõ: " + JSON.stringify(name) +
-                            "\n  (" + x.a + ")").join("\n\n") +
-            "\n\nContract SẼ CHO PHÉP, vì nó chỉ chặn được trùng tên y hệt từng byte. " +
-            "Nhưng người xác minh nhìn trên màn hình sẽ không phân biệt được hai đơn vị này.\n\n" +
-            "Vẫn tiếp tục?")) return;
-        } catch { }
-        await govTx("Công nhận đơn vị", () => contract.addIssuer(addr, name), name + " · " + short(addr, 8, 6));
-        return;
-      }
-      if (kind === "remove")  return govTx("Gỡ quyền đơn vị", () => contract.removeIssuer(addr), short(addr, 8, 6));
-      if (kind === "restore") return govTx("Bật lại đơn vị",  () => contract.restoreIssuer(addr), short(addr, 8, 6));
-    }
-
-    /* ---------- làm mới toàn bộ ---------- */
-    async function refreshAll(force) {
-      try { await loadDirectory(!!force); await fillIssuerSelect(); } catch { }
-      renderGovernance();
-      renderList();
-    }
-
-    /* ---------- khởi động ---------- */
-    const TABS = ["verify", "issue", "mine", "manage", "directory", "admin"];
-    document.querySelectorAll("nav button").forEach((b) => {
-      b.addEventListener("click", () => {
-        document.querySelectorAll("nav button").forEach((x) => x.classList.remove("on"));
-        b.classList.add("on");
-        TABS.forEach((t) => $("tab-" + t).classList.toggle("hidden", t !== b.dataset.tab));
-        if (b.dataset.tab === "manage")    renderList();
-        if (b.dataset.tab === "mine")      renderMine(true);
-        if (b.dataset.tab === "directory") renderDirectory();
-        if (b.dataset.tab === "admin")     renderGovernance();
-        if (b.dataset.tab === "verify")    refreshAll(false);
-      });
-    });
-
-    $("btnConnect").addEventListener("click", connect);
-    $("btnSaveContract").addEventListener("click", () => {
-      const v = $("inpContract").value.trim();
-      if (!v) { localStorage.removeItem(KEY_CONTRACT); renderAnchor(); alert("Đã quay về địa chỉ chính thức."); return; }
-      if (!ethers.isAddress(v)) { alert("Địa chỉ không hợp lệ."); return; }
-      if (v.toLowerCase() !== CONTRACT_ADDRESS.toLowerCase() &&
-        !confirm("Bạn sắp trỏ trang này tới một sổ đăng ký KHÁC với địa chỉ chính thức.\n\n" +
-          "Chỉ làm việc này nếu bạn tự deploy contract để phát triển. Tiếp tục?")) return;
-      localStorage.setItem(KEY_CONTRACT, v);
-      renderAnchor();
-      alert("Đã đặt địa chỉ tùy chỉnh. Bấm Kết nối ví để tiếp tục.");
-    });
-    $("btnResetContract").addEventListener("click", () => {
-      localStorage.removeItem(KEY_CONTRACT);
-      $("inpContract").value = "";
-      renderAnchor();
-      alert("Đã khôi phục địa chỉ chính thức.");
-    });
-
-    $("btnIssue").addEventListener("click", doIssue);
-    $("btnVerify").addEventListener("click", doVerify);
-    $("btnRefresh").addEventListener("click", renderList);
-    $("btnRefreshMine").addEventListener("click", () => renderMine(true));
-    $("btnRefreshDir").addEventListener("click", renderDirectory);
-    $("btnExport").addEventListener("click", exportEvidence);
-    $("btnClearLedger").addEventListener("click", () => {
-      if (confirm("Xóa toàn bộ nhật ký bằng chứng?")) { writeJSON(KEY_LEDGER, []); renderLedger(); }
-    });
-    $("btnWipeStore").addEventListener("click", () => {
-      if (!confirm("Xóa toàn bộ họ tên học viên và tên khóa học khỏi trình duyệt này?\n\n" +
-        "Bản ghi trên chuỗi không bị ảnh hưởng — nó không thể sửa.")) return;
-      localStorage.removeItem(KEY_STORE);
-      renderList();
-      logEntry({ op: "Xóa dữ liệu off-chain", detail: "localStorage đã được dọn (FE-08)" });
-    });
-
-    $("btnAddIssuer").addEventListener("click", () => adminAction("add"));
-    $("btnRemoveIssuer").addEventListener("click", () => adminAction("remove"));
-    $("btnRestoreIssuer").addEventListener("click", () => adminAction("restore"));
-    $("btnCheckIssuer").addEventListener("click", () => adminAction("check"));
-
-    $("btnInherit").addEventListener("click", () => {
-      const o = $("inhOld").value.trim(), n = $("inhNew").value.trim();
-      if (!ethers.isAddress(o) || !ethers.isAddress(n)) { banner("adminOut", "Địa chỉ không hợp lệ.", true); return; }
-      govTx("Chuyển giao danh tính", () => contract.inheritIssuer(o, n),
-        short(o, 8, 6) + " → " + short(n, 8, 6));
-    });
-    $("btnTransferOwner").addEventListener("click", () => {
-      const a = $("govNewAddr").value.trim();
-      if (!ethers.isAddress(a)) { banner("adminOut", "Địa chỉ không hợp lệ.", true); return; }
-      govTx("Chuyển quyền owner", () => contract.transferOwnership(a), short(a, 8, 6));
-    });
-    $("btnAcceptOwner").addEventListener("click", () =>
-      govTx("Nhận quyền owner", () => contract.acceptOwnership()));
-
-    wireFileInput("isFile", "isHashOut", issueFile);
-    wireFileInput("vfFile", "vfHashOut", verifyFile);
-    renderAnchor();
-    renderLedger();
-    initReadOnly();
-    wireWalletEvents();   // gắn TRƯỚC khi kết nối: đổi mạng lúc nào cũng bắt được
-    refreshAll(true);
-  </script>
+  <script src="app.js"></script>
 
 </body>
 
