@@ -1,0 +1,24 @@
+# Foundry chỉ dùng cho fuzz bất biến (test/foundry). Biên dịch, test đơn vị và deploy vẫn chạy bằng Hardhat.
+# Chạy:  forge test                      (INHERIT_DELAY = 48 giờ, mặc định)
+#        DELAY=60 forge test             (INHERIT_DELAY = 60 giây, khớp cấu hình demo)
+[profile.default]
+src = "contracts"
+test = "test/foundry"
+out = "out-foundry"
+cache_path = "cache-foundry"
+libs = ["node_modules"]
+solc_version = "0.8.24"
+evm_version = "paris"
+optimizer = true
+optimizer_runs = 200
+fs_permissions = [{ access = "read-write", path = "./cache-foundry" }]
+remappings = [
+  "@openzeppelin/contracts/=node_modules/@openzeppelin/contracts/",
+  "forge-std/=node_modules/forge-std/src/",
+]
+
+[invariant]
+runs = 1000
+depth = 80
+fail_on_revert = false
+seed = "0x20261009"

@@ -17,7 +17,8 @@
     "verify:sepolia": "hardhat verify --network sepolia",
     "gas": "hardhat run scripts/gas-v3.js",
     "issue-batch": "hardhat run scripts/issue-batch.js --network localhost",
-    "slither": "slither . --filter-paths \"contracts/attack|contracts/test|contracts/legacy|node_modules\" --exclude-dependencies"
+    "fuzz": "forge test -vv",
+    "slither": "slither . --compile-force-framework hardhat --filter-paths \"contracts/attack|contracts/test|contracts/legacy|node_modules\" --exclude-dependencies"
   },
   "keywords": [],
   "author": "Tạ Minh Đức",
@@ -27,6 +28,7 @@
     "@openzeppelin/merkle-tree": "^1.0.8",
     "acorn": "^8.19.0",
     "dotenv": "^16.4.5",
+    "forge-std": "github:foundry-rs/forge-std#v1.17.0",
     "hardhat": "^2.29.0",
     "solc": "^0.8.24"
   },

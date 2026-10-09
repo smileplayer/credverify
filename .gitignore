@@ -6,3 +6,5 @@ coverage
 coverage.json
 receipts/
 demo-issuer.key
+out-foundry
+cache-foundry

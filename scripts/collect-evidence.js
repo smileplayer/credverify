@@ -628,7 +628,7 @@ async function main() {
   md += "Lưu ý: toàn bộ mục này là hằng số trong script, phải cập nhật tay sau mỗi lần chạy Slither.\n\n";
   md += "| Hạng mục | Giá trị |\n|---|---|\n";
   md += "| Công cụ | Slither `slither-analyzer` 0.11.6 |\n";
-  md += "| Lệnh | `slither . --filter-paths \"contracts/attack|contracts/test|contracts/legacy|node_modules\" --exclude-dependencies` |\n";
+  md += "| Lệnh | `slither . --compile-force-framework hardhat --filter-paths \"contracts/attack|contracts/test|contracts/legacy|node_modules\" --exclude-dependencies` |\n";
   md += "| Log gốc | `docs/slither-report.txt` |\n";
   md += "| Phạm vi | `contracts/CredentialRegistry.sol`, 102 detector |\n";
   md += "| Kết quả | **10 phát hiện — 0 High, 0 Medium, 3 Low (`timestamp`), 7 Informational (`assembly`, `cyclomatic-complexity`, 4 × `too-many-digits`, `naming-convention`)** |\n\n";

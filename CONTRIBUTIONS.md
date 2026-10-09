@@ -25,6 +25,7 @@ Sinh viên có sử dụng công cụ hỗ trợ trong quá trình thực hiện
 |---|---|---|
 | **Trợ lý AI (mô hình ngôn ngữ)** | Rà soát bảo mật đối kháng; phản biện thiết kế; sinh mã nháp cho contract, test và giao diện | Xuyên suốt đề tài. |
 | Hardhat + solidity-coverage | Biên dịch, kiểm thử, đo độ phủ | `npx hardhat test`, `npx hardhat coverage` |
+| Foundry 1.5.1 + forge-std | Fuzz bất biến (`test/foundry/Invariants.t.sol`, viết trong kiểm toán độc lập lượt 4) | `npm run fuzz` |
 | Slither 0.11.6 | Phân tích tĩnh smart contract | `npm run slither` |
 | MetaMask | Kiểm thử luồng ghi bằng ví thật | Ảnh chụp giao diện V2 đã gỡ; chụp lại trên bản Sepolia |
 

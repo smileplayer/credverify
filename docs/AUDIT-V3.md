@@ -1,7 +1,7 @@
 # AUDIT V3 — các lỗi đã tìm, đã sửa, và còn mở
 
-Phạm vi: `contracts/CredentialRegistry.sol` (V2 → V3, qua chín đợt sửa 04–08/10/2026 — bảng dưới), giao diện `app/` (một tệp `index.html` đến đợt 3; tách `index.html` + `app.js` + `app.css` từ đợt 4 — mục 11), các script trong `scripts/`.
-Ngày: 04–08/10/2026. Bản phát hành là **V3** (`package.json` 3.0.0). Trong quá trình làm, các thay đổi đi theo đợt;
+Phạm vi: `contracts/CredentialRegistry.sol` (V2 → V3, qua mười đợt sửa 04–09/10/2026 — bảng dưới), giao diện `app/` (một tệp `index.html` đến đợt 3; tách `index.html` + `app.js` + `app.css` từ đợt 4 — mục 11), các script trong `scripts/`.
+Ngày: 04–09/10/2026. Bản phát hành là **V3** (`package.json` 3.0.0). Trong quá trình làm, các thay đổi đi theo đợt;
 các mục dưới giữ nguyên nội dung từng đợt để còn đối chiếu.
 
 | Đợt | Thời điểm | Nội dung chính | Mục |
@@ -15,6 +15,7 @@ các mục dưới giữ nguyên nội dung từng đợt để còn đối chi�
 | 7 | 08/10 | Khung vàng cho đơn vị ngừng hoạt động, giả định tin cậy multisig, rà soát mở rộng | 14–15 |
 | 8 | tối 08/10 | V341-01 (`INHERIT_DELAY` là tham số deploy) | 16 |
 | 9 | tối 08/10 | Hợp nhất thành bản V3 chính thức: bỏ số phiên bản phụ, dọn comment, gộp test | 17 |
+| 10 | tối 09/10 | Kiểm toán lượt 4: đưa bộ fuzz bất biến Foundry vào repo (đóng OPS-04) | 18 |
 
 ## 0. Phương pháp và môi trường
 
@@ -862,3 +863,51 @@ toán đang tham chiếu chúng.
 - **CSP/SRI:** `page-integrity --check` khớp.
 - **Deploy:** 3.177.154 gas. Bỏ comment không đổi bytecode thực thi.
 
+---
+
+## 18. Đợt 10 (tối 09/10/2026) — fuzz bất biến Foundry (kiểm toán lượt 4, đóng OPS-04)
+
+Kiểm toán độc lập lượt 4 chạy fuzz bất biến bằng Foundry 1.5.1 (480.000 lời gọi trên hai cấu hình INHERIT_DELAY)
+và Aderyn 0.6.8. **Không có phát hiện mới.** Contract **không đổi** trong đợt này, nên bytecode, gas deploy
+(3.177.154), coverage và kết quả Slither giữ nguyên.
+
+**Mutation test của kiểm toán viên:** cài lại 8 lỗi giả M1–M8 vào contract — gồm các lỗi đã sửa V2-01, V3-01,
+V34-01, SC-03 — fuzz bắt được cả 8, mỗi lỗi rút gọn còn 1–5 bước gọi. Bộ bất biến đủ nhạy để bắt lại đúng các
+lỗi lịch sử nếu chúng tái xuất hiện.
+
+**Aderyn:** 0 High. Bốn Low, không cần sửa contract:
+
+| Mã | Nội dung | Xử lý |
+|---|---|---|
+| L-1 | Tập trung quyền: 8 hàm `onlyOwner` | Giả định tin cậy đã ghi (README mục 11); multisig là hướng phát triển |
+| L-2 | Số `0x20` viết thẳng trong assembly | Chấp nhận — chỉ ảnh hưởng dễ đọc; không đổi bytecode trước deploy |
+| L-3 | Trường struct `compromiseDeclaredAt` trùng tên mapping | Chấp nhận — đổi tên sẽ đổi tên trường trong ABI mà giao diện và test đang dùng |
+| L-4 | Hằng mặt nạ bit bị báo không dùng | Báo nhầm — các hằng được dùng trong khối assembly kiểm tên |
+
+**Đưa vào repo:**
+
+| Tệp | Nội dung |
+|---|---|
+| `test/foundry/Invariants.t.sol` | Bộ fuzz của kiểm toán viên. Hai chỉnh sửa: đường import trỏ `contracts/`; `afterInvariant` ghi thống kê vào `cache-foundry/invariant-stats.txt` (đã gitignore) |
+| `foundry.toml` | `src = contracts`, `test = test/foundry`, solc 0.8.24, optimizer 200, evm `paris` (khớp Hardhat); 1000 lượt × độ sâu 80, `fail_on_revert = false`, seed `0x20261009`; remapping OpenZeppelin và forge-std vào `node_modules` |
+| `package.json` | devDependency `forge-std` 1.17.0 (từ GitHub, khóa commit trong `package-lock.json`); script `npm run fuzz` |
+| `package.json`, README, `scripts/collect-evidence.js` | Lệnh Slither thêm `--compile-force-framework hardhat`: có `foundry.toml` thì Slither mặc định chọn Foundry |
+| `docs/fuzz-report.txt` | Log gốc của lần chạy dưới |
+
+Foundry chỉ dùng cho fuzz. Biên dịch, test đơn vị, coverage và deploy vẫn chạy bằng Hardhat; Hardhat không đọc
+`test/foundry/`.
+
+**Quét lại:**
+- **Fuzz (`forge test`):** 48 giờ — pass, 1000 lượt, 80.000 lời gọi. 60 giây (`DELAY=60`) — pass, 80.000 lời gọi.
+  Số lượt đi tới nhánh khó (trên 1000): chuyển giao sau lộ khóa 395 / 583, thu hồi bị vô hiệu 315 / 457,
+  danh tính đóng băng 782 / 730. Số liệu lệch nhẹ so với báo cáo kiểm toán (405 / 327 / 738 ở cấu hình 48 giờ)
+  có thể do khác phiên bản forge-std; kết luận không đổi.
+- **Test Hardhat:** 191 passing (không đổi).
+- **Slither:** 10 kết quả, 0 High/Medium (không đổi), chạy với `--compile-force-framework hardhat`.
+- **`npm ci` sạch:** cài được `forge-std` qua HTTPS, không cần khóa SSH GitHub.
+
+| Mã | Trạng thái sau đợt 10 |
+|---|---|
+| OPS-04 | **Đã đóng** — fuzz bất biến nằm trong repo, chạy bằng `npm run fuzz` |
+| OPS-03 | Còn mở — chưa có CI |
+| OPS-01 | **Đã đóng** — V3 đã commit và gắn tag `v3.0.0` trên GitHub |

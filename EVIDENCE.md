@@ -545,7 +545,7 @@ Lưu ý: toàn bộ mục này là hằng số trong script, phải cập nhật
 | Hạng mục | Giá trị |
 |---|---|
 | Công cụ | Slither `slither-analyzer` 0.11.6 |
-| Lệnh | `slither . --filter-paths "contracts/attack|contracts/test|contracts/legacy|node_modules" --exclude-dependencies` |
+| Lệnh | `slither . --compile-force-framework hardhat --filter-paths "contracts/attack|contracts/test|contracts/legacy|node_modules" --exclude-dependencies` |
 | Log gốc | `docs/slither-report.txt` |
 | Phạm vi | `contracts/CredentialRegistry.sol`, 102 detector |
 | Kết quả | **10 phát hiện — 0 High, 0 Medium, 3 Low (`timestamp`), 7 Informational (`assembly`, `cyclomatic-complexity`, 4 × `too-many-digits`, `naming-convention`)** |
