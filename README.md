@@ -7,7 +7,7 @@ Hệ thống cấp, xác minh và thu hồi chứng chỉ khóa học trên bloc
   xử lý **khóa bị lộ** (thu hồi phá hoại bị vô hiệu, bằng giả bị gắn cờ) và chuyển giao danh tính
   qua **độ trễ chuyển giao** (tham số lúc deploy, bất biến: mặc định 48 giờ; bản demo có thể đặt 1 phút); tên đơn vị
   kiểm trên chuỗi theo **danh sách cho phép chữ tiếng Việt**; thu hồi trong lô chỉ nhận **lá thật** của cây
-- Bộ kiểm thử tự động **191 test** — phủ luồng thuận, hành vi sai bị chặn, và kịch bản phục hồi sự cố
+- Bộ kiểm thử tự động **191 test** — phủ luồng thuận, hành vi sai bị chặn, và kịch bản phục hồi sự cố — cộng một bộ **fuzz bất biến** Foundry (10 bất biến, 80.000 lời gọi ngẫu nhiên mỗi lần chạy)
 - Ứng dụng web tĩnh (`index.html` + `app.js` + `app.css`, không backend, không bước build) với 6 tab; **ba tab chạy không cần ví**
 - Script tự chạy kịch bản nghiệm thu và sinh `EVIDENCE.md` kèm số đo thật
 
@@ -25,6 +25,7 @@ chỉ thì không. Nếu trang web này biến mất, `verifyCertificate` vẫn 
 - Kết nối internet (lần đầu chạy `hardhat compile`, Hardhat sẽ tự tải trình biên dịch Solidity)
 - MetaMask trong trình duyệt — chỉ cần khi chạy ứng dụng web ở Mục 7
 - Python 3.8+ — chỉ cần khi chạy phân tích tĩnh ở Mục 5
+- [Foundry](https://book.getfoundry.sh/getting-started/installation) — chỉ cần khi chạy fuzz bất biến ở Mục 4
 
 ## 2. Cài đặt
 
@@ -62,6 +63,44 @@ phòng thủ chiều sâu trong `acceptOwnership` mà mã hiện tại không th
 Mỗi test deploy một contract mới qua `beforeEach` nên các test độc lập hoàn toàn, đổi thứ tự
 chạy không ảnh hưởng kết quả. Nếu tất cả hiện chữ xanh (passing), logic lõi đúng như thiết kế.
 
+### Fuzz bất biến (Foundry)
+
+Test đơn vị kiểm những kịch bản đã nghĩ ra trước. `test/foundry/Invariants.t.sol` làm ngược lại: một
+*handler* đóng vai owner, sáu khóa issuer, ba ví có thể làm owner và ba học viên, gọi **ngẫu nhiên** mọi
+hàm ghi của contract (kể cả gọi sai vai), tua thời gian, và sau **mỗi** lời gọi kiểm 10 bất biến:
+
+| Mã | Bất biến |
+|---|---|
+| I1 | Một danh tính không bao giờ có hai khóa Active cùng lúc |
+| I2 | Owner và owner đang chờ nhận không bao giờ là issuer |
+| I3 | Thu hồi hợp lệ — kể cả thu hồi trước mốc lộ khóa — không bao giờ bị vô hiệu |
+| I4 | `compromisedAt` chỉ ghi một lần và không muộn hơn lúc công bố |
+| I5 | Danh tính đã đóng băng không sống lại, hiệu lực chứng chỉ của nó không đổi |
+| I6 | `activeIssuerCount` khớp số issuer Active thực tế |
+| I7 | Ví lạ không gọi được `addIssuer`, `removeIssuer`, `proposeInherit`, `executeInherit` |
+| I8 | Thu hồi không làm chứng chỉ có hiệu lực trở lại; chuyển giao và thao tác không liên quan không đổi hiệu lực chứng chỉ |
+| I9 | Khóa của danh tính khác và owner không thu hồi được chứng chỉ, lá hay lô |
+| I10 | Không thực thi chuyển giao trước `INHERIT_DELAY` |
+
+Ngoài ra handler thử `revokeLeaf` bằng lá thay cho `inner` và bằng root thay cho lá (V34-01) — cả hai phải luôn thất bại.
+
+```bash
+npm install            # kéo forge-std về node_modules (devDependency)
+forge test -vv         # INHERIT_DELAY = 48 giờ (mặc định); hoặc: npm run fuzz
+DELAY=60 forge test    # INHERIT_DELAY = 60 giây (PowerShell: $env:DELAY=60; forge test)
+```
+
+Cấu hình trong `foundry.toml`: 1000 lượt × độ sâu 80, hạt giống cố định `0x20261009` để chạy lại ra
+cùng chuỗi lời gọi. Foundry chỉ dùng cho fuzz — biên dịch, test đơn vị và deploy vẫn chạy bằng Hardhat.
+Mỗi lượt ghi một dòng vào `cache-foundry/invariant-stats.txt` cho biết fuzz đã đi tới các nhánh khó
+(chuyển giao sau lộ khóa, thu hồi bị vô hiệu, danh tính đóng băng) hay chưa.
+
+Kết quả lần chạy gần nhất (09/10/2026, log gốc ở `docs/fuzz-report.txt`): **cả hai cấu hình đều pass**, mỗi cấu hình
+1000 lượt × 80 = 80.000 lời gọi, không bất biến nào bị phá. Số lượt (trên 1000) đi tới nhánh khó — 48 giờ:
+chuyển giao sau lộ khóa 395, thu hồi bị vô hiệu 315, danh tính đóng băng 782; 60 giây: 583 / 457 / 730.
+Bộ fuzz do kiểm toán độc lập lượt 4 viết; khi cài lại 8 lỗi giả (gồm các lỗi cũ V2-01, V3-01, V34-01,
+SC-03) vào contract, fuzz bắt được cả 8 — chi tiết ở `docs/AUDIT-V3.md` mục 18.
+
 ### Cấp theo lô
 
 ```bash
@@ -90,10 +129,10 @@ nhận và nộp kèm tệp; tab **Xác minh** có ô chọn biên nhận. Lá M
 
 ```bash
 pip install slither-analyzer
-slither .
+slither . --compile-force-framework hardhat
 ```
 
-Slither tự gọi `hardhat clean` và `hardhat compile --force` trước khi phân tích. Nếu báo lỗi
+Cờ `--compile-force-framework hardhat` cần thiết vì repo có thêm `foundry.toml` (cho fuzz, mục 4); thiếu cờ này Slither sẽ chọn Foundry. Slither tự gọi `hardhat clean` và `hardhat compile --force` trước khi phân tích. Nếu báo lỗi
 không tìm thấy trình biên dịch:
 
 ```bash
@@ -105,7 +144,7 @@ solc-select use 0.8.24
 Loại contract tấn công, ví multisig mẫu, bản V2 lưu để đo gas và thư viện OpenZeppelin khỏi phạm vi quét:
 
 ```bash
-slither . --filter-paths "contracts/attack|contracts/test|contracts/legacy|node_modules" --exclude-dependencies
+slither . --compile-force-framework hardhat --filter-paths "contracts/attack|contracts/test|contracts/legacy|node_modules" --exclude-dependencies
 ```
 
 Log gốc của lần chạy gần nhất lưu ở `docs/slither-report.txt`. Kết quả: **10 phát hiện trên 102
@@ -303,6 +342,7 @@ test/CredentialRegistry.test.js    -> bộ test V2, cập nhật cho V3
 test/CredentialRegistryV3.test.js  -> bộ test phần mới của V3
 test/XssViaRevertString.test.js    -> bằng chứng chống XSS qua chuỗi lỗi từ RPC / revert
 test/UiShared.test.js              -> giao diện và script dùng cùng quy tắc (đọc hàm thật từ app/app.js)
+test/foundry/Invariants.t.sol      -> fuzz bất biến Foundry: 10 bất biến, handler gọi ngẫu nhiên mọi hàm ghi
 test/uiSource.js                   -> trích hàm của app/app.js bằng trình phân tích cú pháp, cho test
 scripts/deploy.js                  -> script deploy (in ra 3 hằng số neo cần sửa trong app/app.js)
 scripts/add-issuer.js              -> owner công nhận một đơn vị phát hành bằng dòng lệnh
@@ -321,7 +361,9 @@ app/index.html                     -> khung trang 6 tab + CSP (không có script
 app/app.js                         -> toàn bộ mã giao diện, gồm 3 hằng số neo và RPC_URLS
 app/app.css                        -> kiểu dáng
 hardhat.config.js                  -> cấu hình Hardhat
+foundry.toml                       -> cấu hình Foundry, chỉ cho fuzz bất biến
 docs/slither-report.txt            -> log gốc của lần chạy Slither gần nhất
+docs/fuzz-report.txt               -> log gốc của lần chạy fuzz bất biến gần nhất (hai cấu hình INHERIT_DELAY)
 docs/GAS-BASELINE.md               -> số đo gas qua ba phiên bản kiến trúc V0–V2
 docs/GAS-V3.md                     -> số đo gas V3 (sinh bởi scripts/gas-v3.js)
 docs/AUDIT-V3.md                   -> nhật ký kiểm toán: lỗi đã tìm, đã sửa và còn mở của V3, theo từng đợt
