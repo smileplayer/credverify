@@ -30,8 +30,9 @@ module.exports = {
     },
   },
 
+  // Etherscan API V2: MỘT khóa dạng chuỗi dùng cho mọi mạng. Dạng { sepolia: "…" } là API V1 đã ngừng.
   etherscan: {
-    apiKey: { sepolia: process.env.ETHERSCAN_API_KEY || "" },
+    apiKey: process.env.ETHERSCAN_API_KEY || "",
   },
 
   gasReporter: {
