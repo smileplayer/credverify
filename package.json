@@ -27,7 +27,7 @@
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
     "@openzeppelin/merkle-tree": "^1.0.8",
     "acorn": "^8.19.0",
-    "dotenv": "^16.4.5",
+    "dotenv": "^16.6.1",
     "forge-std": "github:foundry-rs/forge-std#v1.17.0",
     "hardhat": "^2.29.0",
     "solc": "^0.8.24"

@@ -116,14 +116,11 @@ contract CredentialRegistry {
     uint256 public constant MAX_NAME_BYTES = 256;
 
     /// Sau khi bị gỡ quyền, một khóa chỉ còn được bật lại hoặc ĐỀ XUẤT chuyển giao trong
-    /// khoảng này. Hết hạn, danh tính ĐÓNG BĂNG vĩnh viễn. Lý do: nếu không có hạn, owner
-    /// có thể chuyển danh tính của một trung tâm ĐÃ GIẢI THỂ sang ví của mình rồi thu hồi
-    /// toàn bộ chứng chỉ của trung tâm đó.
+    /// khoảng này. Hết hạn, danh tính ĐÓNG BĂNG vĩnh viễn.
     uint64 public constant RECOVERY_WINDOW = 7 days;
 
     /// Độ trễ bắt buộc giữa đề xuất và thực thi chuyển giao danh tính. Trong lúc chờ, trung tâm
     /// thật thấy đề xuất công khai và kịp phản đối. `removeIssuer` vẫn tức thì.
-    /// Đặt một lần lúc deploy, bất biến; production 48 giờ (mặc định của scripts/deploy.js).
     uint64 public immutable INHERIT_DELAY;
 
     /// Biên của INHERIT_DELAY. Sàn 1 phút để demo được; trần bằng RECOVERY_WINDOW.
@@ -134,8 +131,7 @@ contract CredentialRegistry {
     /// một đề xuất "treo" để hồi sinh danh tính đã đóng băng về sau.
     uint64 public constant PROPOSAL_TTL = 7 days;
 
-    /// Mốc lộ khóa không được lùi quá xa: owner chọn mốc này, nên không giới hạn
-    /// thì owner có thể vô hiệu một lần thu hồi hợp pháp từ nhiều năm trước.
+    /// Mốc lộ khóa không được lùi quá xa
     uint64 public constant MAX_COMPROMISE_LOOKBACK = 30 days;
 
     // ---------- Trạng thái lưu trữ ----------
