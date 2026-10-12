@@ -16,13 +16,13 @@
     script-src 'self' https://cdn.jsdelivr.net;
     style-src 'self' 'unsafe-inline';
     img-src 'self' data:;
-    connect-src http://127.0.0.1:8545;
+    connect-src https://ethereum-sepolia-rpc.publicnode.com https://sepolia.drpc.org;
     object-src 'none'; base-uri 'none'; form-action 'none'">
 
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"
     integrity="sha384-gpR0Q6Hx/O+uevlbpbANbS0LWjbejPV1sqD/8w422l/fW8whGY0EPmKw3uG7ACYP"
     crossorigin="anonymous"></script>
-  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="app.css" integrity="sha384-7QEXKtRZYScziY0vZix5Glyt3WOH5THlcukTmd9qQoUCd7BbAGsF401vAU+NLWUp">
 </head>
 
 <body>
@@ -362,7 +362,7 @@
       </div>
     </aside>
   </main>
-  <script src="app.js"></script>
+  <script src="app.js" integrity="sha384-icWeLWPxnYLZmnXtdsd5pjwbQzD+fSZ73Au5zrSsUJRw8xzQ2lflnQpXt1wT0NYx"></script>
 
 </body>
 

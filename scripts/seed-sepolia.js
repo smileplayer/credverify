@@ -30,6 +30,11 @@ const EXPLORER = {
   421614: "https://sepolia.arbiscan.io",
 };
 
+// RPC công cộng không cần khóa API, hai nhà cung cấp độc lập.
+const PUBLIC_RPCS = {
+  11155111: ["https://ethereum-sepolia-rpc.publicnode.com", "https://sepolia.drpc.org"],
+};
+
 function link(chainId, kind, value) {
   const base = EXPLORER[Number(chainId)];
   return base ? `${base}/${kind}/${value}` : value;
@@ -194,7 +199,9 @@ async function main() {
   md.push(`const CONTRACT_ADDRESS  = "${address}";`);
   md.push(`const EXPECTED_CHAIN_ID = ${chainId}n;`);
   md.push(`const DEPLOY_BLOCK = ${deployBlock};`);
-  md.push(`const RPC_URLS = ["${process.env.SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com"}", "<RPC độc lập thứ hai>"];   // đối chiếu ≥ 2 nhà cung cấp`);
+  // Không in SEPOLIA_RPC_URL: URL của Alchemy/Infura chứa khóa API.
+  const publicRpcs = PUBLIC_RPCS[chainId] || ["<RPC công cộng thứ nhất>", "<RPC độc lập thứ hai>"];
+  md.push(`const RPC_URLS = ${JSON.stringify(publicRpcs).replace(/","/g, '", "')};   // đối chiếu ≥ 2 nhà cung cấp, không khóa API`);
   md.push("```");
   md.push("");
   console.log(md.join("\n"));
@@ -203,7 +210,7 @@ async function main() {
     console.log("(Mạng local — không ghi docs/sepolia-evidence.md để khỏi lẫn với bằng chứng testnet.)");
   } else {
     const outPath = path.join(__dirname, "..", "docs", "sepolia-evidence.md");
-    fs.writeFileSync(outPath, md.slice(4).join("\n"), "utf8");
+    fs.writeFileSync(outPath, "# Bằng chứng trên testnet công khai\n\n" + md.slice(3).join("\n"), "utf8");
     console.log("Đã ghi thêm vào:", outPath);
   }
 }

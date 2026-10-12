@@ -27,7 +27,9 @@ describe("CSP và SRI của giao diện", function () {
     expect(problems(rel, parts)).to.deep.equal([]);
     const p = problems(rel, { ...parts, js: parts.js + "\n// sửa" });
     expect(p.join()).to.include("integrity của app.js đã cũ");
-    expect(apply(rel, parts, "dev")).to.equal(apply(html, parts));
+    // Đúng cả khi repo giữ bản phát triển lẫn bản phát hành.
+    expect(apply(rel, parts, "dev")).to.equal(apply(html, parts, "dev"));
+    expect(apply(rel, parts, "dev")).to.not.include("integrity=\"sha384-" + sri(parts.js).slice(7));
   });
   it("phát hiện khối script nội tuyến bị thêm vào", () => {
     const bad = html.replace("</body>", "<script>alert(1)</script></body>");

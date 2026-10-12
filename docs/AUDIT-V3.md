@@ -1,7 +1,7 @@
 # AUDIT V3 — các lỗi đã tìm, đã sửa, và còn mở
 
-Phạm vi: `contracts/CredentialRegistry.sol` (V2 → V3, qua mười đợt sửa 04–09/10/2026 — bảng dưới), giao diện `app/` (một tệp `index.html` đến đợt 3; tách `index.html` + `app.js` + `app.css` từ đợt 4 — mục 11), các script trong `scripts/`.
-Ngày: 04–09/10/2026. Bản phát hành là **V3** (`package.json` 3.0.0). Trong quá trình làm, các thay đổi đi theo đợt;
+Phạm vi: `contracts/CredentialRegistry.sol` (V2 → V3, qua mười ba đợt sửa 04–12/10/2026 — bảng dưới), giao diện `app/` (một tệp `index.html` đến đợt 3; tách `index.html` + `app.js` + `app.css` từ đợt 4 — mục 11), các script trong `scripts/`.
+Ngày: 04–12/10/2026. Bản phát hành là **V3** (`package.json` 3.0.0). Trong quá trình làm, các thay đổi đi theo đợt;
 các mục dưới giữ nguyên nội dung từng đợt để còn đối chiếu.
 
 | Đợt | Thời điểm | Nội dung chính | Mục |
@@ -16,6 +16,9 @@ các mục dưới giữ nguyên nội dung từng đợt để còn đối chi�
 | 8 | tối 08/10 | V341-01 (`INHERIT_DELAY` là tham số deploy) | 16 |
 | 9 | tối 08/10 | Hợp nhất thành bản V3 chính thức: bỏ số phiên bản phụ, dọn comment, gộp test | 17 |
 | 10 | tối 09/10 | Kiểm toán lượt 4: đưa bộ fuzz bất biến Foundry vào repo (đóng OPS-04) | 18 |
+| 11 | 11/10 | Triển khai Sepolia, neo giao diện vào bản đó, gas sau Glamsterdam | 19 |
+| 12 | tối 11/10 | Thí nghiệm mạo danh có đối chứng (kiểu Block.co, đối chứng IET 2026) | 20 |
+| 13 | 12/10 | Quét dữ liệu cá nhân trước commit; gọn chú thích | 21 |
 
 ## 0. Phương pháp và môi trường
 
@@ -911,3 +914,147 @@ Foundry chỉ dùng cho fuzz. Biên dịch, test đơn vị, coverage và deploy
 | OPS-04 | **Đã đóng** — fuzz bất biến nằm trong repo, chạy bằng `npm run fuzz` |
 | OPS-03 | Còn mở — chưa có CI |
 | OPS-01 | **Đã đóng** — V3 đã commit và gắn tag `v3.0.0` trên GitHub |
+
+---
+
+## 19. Đợt 11 (11/10/2026) — triển khai Sepolia, neo giao diện, gas sau Glamsterdam
+
+**Bối cảnh.** Tác giả bỏ bốn dòng chú thích trong contract (commit `7192c5c`, cùng `dotenv` ^16.6.1), rồi chạy
+`seed-sepolia.js` và `hardhat verify` trên máy mình. Kết quả: contract `0x672e08DBF5Ce118a235E36C235b53Fa251dDe7F6`,
+block 11890480, Etherscan **Exact Match**, `INHERIT_DELAY` = 60 giây (cấu hình demo, tác giả chọn). Tám giao dịch mẫu
+đều thành công; trạng thái đọc lại đúng (cấp lẻ hợp lệ / đã thu hồi; lô: lá hợp lệ / lá đã thu hồi).
+
+### 19.1. Lỗi tìm thấy và đã sửa
+
+| Mã | Mức | Nội dung | Xử lý |
+|---|---|---|---|
+| OPS-05 | **Cao** | `seed-sepolia.js` ghi nguyên `SEPOLIA_RPC_URL` — với Alchemy/Infura là URL **chứa khóa API** — vào `docs/sepolia-evidence.md` (tệp không nằm trong `.gitignore`) và gợi ý dán nó vào `RPC_URLS` của `app.js` (mã công khai) | Script chỉ in RPC công cộng không khóa theo chainId (`PUBLIC_RPCS`); khóa đã ghi được thay trong tệp trước khi commit (chưa từng push). Khuyến nghị tác giả đổi khóa Alchemy |
+| OPS-06 | Thấp | `seed-sepolia.js` cắt `md.slice(4)` làm mất dòng tiêu đề của bảng đầu, `docs/sepolia-evidence.md` mở đầu bằng dòng phân cách của bảng (bảng vỡ) | Giữ dòng tiêu đề bảng, thêm tiêu đề tệp |
+| T-02 | Thấp | `test/Csp.test.js` giả định `index.html` trong repo là bản phát triển (`apply(rel,"dev") === apply(html)`); repo giữ bản phát hành (SRI) thì test đỏ dù CSP/SRI đúng | So với bản đã gỡ SRI của chính `index.html`, thêm khẳng định bản `dev` không còn integrity của `app.js` |
+| DOC-01 | TB | `EVIDENCE.md` mục 9.4 khẳng định "gas không phụ thuộc mạng, đúng trên mọi mạng EVM" — sai khi các mạng chạy hardfork khác nhau (19.3) | Sửa nguồn trong `collect-evidence.js` và `EVIDENCE.md` |
+
+### 19.2. Thay đổi
+
+| Tệp | Thay đổi |
+|---|---|
+| `app/app.js` | `CONTRACT_ADDRESS` = bản Sepolia, `EXPECTED_CHAIN_ID = 11155111n`, `DEPLOY_BLOCK = 11890480`, `RPC_URLS` = publicnode + dRPC (hai nhà cung cấp độc lập, không khóa API); mỗi dòng ghi chú giá trị local |
+| `app/index.html` | `page-integrity --release`: `connect-src` đúng hai origin RPC, SRI cho `app.js`/`app.css` |
+| `scripts/seed-sepolia.js` | OPS-05, OPS-06 |
+| `scripts/lib/sepolia.js`, `scripts/collect-evidence.js` | Mục 2b "Bản triển khai trên Sepolia" đọc từ `docs/sepolia-evidence.md`; sửa mục 9.4 ý 3 và mục 12 |
+| `docs/sepolia-evidence.md` | Bằng chứng testnet + bảng đối chiếu gas local / Sepolia |
+| `EVIDENCE.md` | Thêm mục 2b, sửa 9.4 ý 3 và mục 12 đúng như văn bản script sinh; **không** sinh lại cả tệp (giữ nguyên số đo độ trễ đã trích trong bài) |
+| `README.md` | Mục 7 (repo neo Sepolia; cách chuyển sang local), mục 9, mục 12 (bảng cấu hình, bản đã triển khai, không dùng RPC có khóa) |
+| `docs/slither-report.txt`, `docs/fuzz-report.txt` | Log của lần chạy mới |
+
+### 19.3. Gas trên Sepolia khác số đo local: nâng cấp Glamsterdam
+
+Sepolia bật Glamsterdam ngày 06/10/2026 13:53:36 UTC (Ethereum Foundation, thông báo 17/09/2026); mainnet chưa có
+ngày. EIP-8037 trong nâng cấp này tính tạo state mới theo đồng hồ riêng, khoảng 1.530 gas/byte (bản nháp, còn Review).
+Hardhat 2.29 mặc định hardfork **Osaka** — luật mainnet hiện hành. Cùng 8 thao tác (`seed-sepolia.js` chạy trên mạng
+Hardhat, `INHERIT_DELAY` = 60):
+
+| Thao tác | Hardhat (Osaka) | Sepolia (Glamsterdam) | Tỉ lệ |
+|---|---|---|---|
+| Deploy | 3.177.142 | 22.497.316 | ×7,08 |
+| Chuyển ETH | 21.000 | 21.000 | ×1,00 |
+| `addIssuer` | 167.765 | 689.885 | ×4,11 |
+| `issueCertificate` | 72.755 | 242.795 | ×3,34 |
+| `revokeCertificate` | 61.053 | 157.473 | ×2,58 |
+| `publishBatch` (4 lá) | 72.142 | 242.182 | ×3,36 |
+| `revokeLeaf` | 59.797 | 141.828 | ×2,37 |
+
+Kiểm chéo: bytecode 14.342 byte × 1.530 ≈ 21,9 triệu gas, khớp deploy. Kết luận: số gas trong bài, `EVIDENCE.md`
+và `docs/GAS-V3.md` giữ nguyên (luật mainnet hiện hành); số Sepolia ghi riêng, có chú thích. Tỉ lệ tiết kiệm của lô so
+với cấp lẻ không đổi; số gas tiết kiệm tuyệt đối mỗi chứng chỉ tăng từ ≈ 54,7 nghìn lên ≈ 182,2 nghìn.
+
+### 19.4. Quét lại
+
+| Hạng mục | Kết quả |
+|---|---|
+| Test Hardhat | **191 passing** (trước khi sửa T-02: 190 passing, 1 failing — chính T-02) |
+| Coverage `CredentialRegistry.sol` | 100 / 99,26 / 100 / 100 (không đổi) |
+| Slither 0.11.6 | 10 kết quả, 0 High/Medium — giống 08/10, chỉ lệch số dòng 4 do bỏ chú thích |
+| Fuzz Foundry 1.5.1 | 48 giờ: pass, 80.000 lời gọi, 127 revert; 60 giây: pass, 80.000 lời gọi, 139 revert. Nhánh khó C/V/F: 411/316/759 · 579/428/729 (09/10: 395/315/782 · 583/457/730 — lệch do metadata bytecode đổi làm đổi từ điển hằng của fuzzer) |
+| Gas deploy (48 giờ) | **3.177.154** (không đổi; bỏ chú thích chỉ đổi metadata) |
+| CSP/SRI | `page-integrity --check` khớp; `connect-src` đúng hai origin RPC |
+| e2e (mới, **17/17**) | Node Hardhat mang chainId 11155111, tái dựng **đúng địa chỉ** `0x672e…e7F6` (mạo danh ví owner, nonce 0) và đúng `DEPLOY_BLOCK` 11890480 cùng 8 giao dịch mẫu; Playwright chặn hai origin RPC thật và chuyển về node này, phục vụ **bản phát hành đúng như trong repo**. Kiểm: `app.js` chạy dưới SRI; hằng neo hiển thị đúng; danh bạ quét event từ `DEPLOY_BLOCK` thấy đơn vị demo; độ trễ đọc từ hợp đồng "1 phút"; cấp lẻ hợp lệ / đã thu hồi; tra theo tên gõ tay; lô + biên nhận: lá hợp lệ / lá đã thu hồi; tab Đơn vị phát hành; 0 vi phạm CSP; 0 lỗi console; **RPC thứ hai chết → trang không kết luận "Hợp lệ"**; `app.js` bị sửa lén → trình duyệt chặn (lỗi integrity); 390 px không cuộn ngang. ethers UMD phục vụ từ gói npm 6.13.2, SRI trùng hash trong trang |
+
+**Giới hạn của lần quét này.** Bảy bộ e2e cũ (ghi qua ví, băng ví, thống kê…) nằm trong scratchpad của phiên trước, không
+còn; đợt này chỉ đổi hằng số và RPC, không đổi logic giao diện, nên bộ e2e mới tập trung vào luồng đọc, CSP/SRI và
+đối chiếu nhiều RPC. Container không ra được RPC Sepolia thật; kiểm trên mạng thật là phần tác giả chụp ảnh giao
+diện (EVIDENCE mục 12). Thao tác ghi trên Sepolia cần MetaMask của tác giả.
+
+**Còn mở sau đợt 11:** ảnh chụp giao diện trên Sepolia; OPS-03 (CI); MR-01…MR-04; V341-02…04. Đưa bộ e2e vào repo
+(hiện chỉ ở container) là việc nên làm để lần sau không mất.
+
+---
+
+## 20. Đợt 12 (tối 11/10/2026) — thí nghiệm mạo danh có đối chứng (Đ4 của lộ trình)
+
+**Mục tiêu.** Kiểm chứng bằng thực nghiệm, có đối chứng, rằng CredVerify chặn lớp tấn công Block.co (danh tính đơn vị cấp
+tự khai) và đo phần nó **không** chặn được. Contract `CredentialRegistry.sol` **không đổi**.
+
+**Đối chứng.** Hệ thống *Micro-credentials Batching* (IET Blockchain 2026) — cùng lớp (lô Merkle, root trên Ethereum).
+Đọc lại repo `nnieru/academic-record-managment` ở commit mới nhất của nhánh Main (`b9b68f4`, 25/07/2026). **Đính chính
+ghi chú đọc bài ngày 04/10:** bản Main hiện tại **có** kiểm Merkle proof trước khi báo "Verified" (`integrityMatch`);
+ghi chú cũ "kết quả verify chỉ được `console.log`" đúng với các commit trước, không đúng với bản hiện tại. Phần vẫn
+đúng: `AddRecord` public, `Institution.register` tự đăng ký và không kiểm tên trùng, ô *Institution Address* lấy từ JSON
+trên IPFS, không đối chiếu với `records[root].issuerAddress` trên chuỗi; không có thu hồi.
+
+| Tệp mới | Nội dung |
+|---|---|
+| `contracts/attack/IetStyleRegistry.sol` | Ngữ nghĩa `Institution` + `AcademicRecord` của IET, viết lại (repo gốc SPDX UNLICENSED nên không chép nguyên văn) |
+| `scripts/lib/iet-verify.js` | Logic trang `verify_status` của IET: Merkle proof 5 trường + root có trên chuỗi; Institution Address lấy từ JSON |
+| `scripts/lib/impersonation.js` | Tám kịch bản E1–E8 + quy tắc kết luận; dùng chung cho test, script và EVIDENCE |
+| `test/Impersonation.test.js` | 9 test khẳng định kết quả **cả hai phía** (đối chứng phải thua, nếu không thí nghiệm vô nghĩa) |
+| `scripts/impersonation-experiment.js` → `docs/IMPERSONATION.md` | Thiết kế, bảng kết quả, đọc kết quả, giới hạn |
+| `scripts/collect-evidence.js` | Mục **7b** chạy thật thí nghiệm; chạy **trước** bước gọi `npx hardhat test` (gọi sau thì kết nối keep-alive tới node bị đóng: `UND_ERR_SOCKET`) |
+
+**Kết quả** (chi tiết `docs/IMPERSONATION.md`):
+
+| # | Kịch bản | Đối chứng | CredVerify |
+|---|---|---|---|
+| E1 | Ví lạ tự đăng ký đúng tên nạn nhân | Thành công | Chặn — `NotOwner` |
+| E2 | Ví chưa công nhận ghi lên sổ | Thành công | Chặn — `NotActiveIssuer` |
+| E3 | Bằng giả tự khai là của nạn nhân (lõi Block.co) | Thành công — "Verified", Institution = nạn nhân | Chặn — không tìm thấy lô dưới danh tính nạn nhân |
+| E4 | Lò bằng được công nhận giả làm nạn nhân | Thành công | Chặn — không gian tên riêng; tên đọc từ chuỗi là của lò bằng |
+| E5 | Tên gần giống | Thành công (mọi chuỗi) | Một phần — chặn trùng, Kirin, dấu chấm, khoảng trắng; **lọt** bỏ dấu (giao diện cảnh báo) và thêm hậu tố (không cảnh báo) |
+| E6 | Sửa nội dung, giữ root | Chặn | Chặn |
+| E7 | Khóa nạn nhân lộ | Thành công vĩnh viễn | **Thành công tới khi owner phản ứng**; sau gỡ khóa + chuyển giao có mốc lộ: bằng giả bị từ chối, bằng thật bị thu hồi bậy hợp lệ trở lại |
+| E8 | Đơn vị ngừng hoạt động | Không còn xác minh được (phụ thuộc JSON trên IPFS) | Vẫn xác minh được |
+
+**Phát hiện cho bài:** (1) E5 "thêm hậu tố" là giới hạn thật — CredVerify chuyển câu hỏi "ai là trường thật" sang trách
+nhiệm công nhận của owner chứ không giải nó; (2) E7 có khoảng hở từ lúc lộ khóa tới lúc phản ứng — ghi trung thực trong
+test (`before = { fake: true, genuine: false }`).
+
+**Quét lại:**
+
+| Hạng mục | Kết quả |
+|---|---|
+| Test Hardhat | **200 passing** (191 + 9) |
+| Coverage `CredentialRegistry.sol` | 100 / 99,26 / 100 / 100 (không đổi) |
+| Slither | 10 kết quả, 0 High/Medium — giống hệt (7 contract được phân tích, 2 contract đối chứng bị lọc) |
+| Fuzz | Không chạy lại — `CredentialRegistry.sol` không đổi; `forge build` biên dịch được cả contract đối chứng |
+| e2e | Không chạy lại — giao diện không đổi |
+| `EVIDENCE.md` | **Sinh lại toàn bộ** bằng `collect-evidence.js` (thêm mục 7b). Gas không đổi (deploy 3.177.154); độ trễ đọc đo lại: trung vị `verifyCertificate` 3,44 ms, `effectiveStatus` 2,08 ms, `buildDirectory` 6,28 ms, băm PDF 776 KB 47,45 ms |
+
+---
+
+## 21. Đợt 13 (12/10/2026) — quét dữ liệu cá nhân trước commit, gọn chú thích
+
+**Quét** toàn bộ tệp sẽ commit (tracked + chưa theo dõi, không tính tệp bị `.gitignore`):
+- Không có MSSV, email, số điện thoại, đường dẫn máy cá nhân, khóa riêng hay khóa API. Các chuỗi 64 hex trong
+  `EVIDENCE.md` và `docs/sepolia-evidence.md` là tx hash / batchId; `SEPOLIA_PRIVATE_KEY` trong `.env.example` là
+  giá trị giả toàn số 0. `.env`, `demo-issuer.key`, `receipts/`, `coverage`, `cache-foundry` đều bị `.gitignore`.
+- Họ tên tác giả có ở `LICENSE`, `package.json` (`author`), `CONTRIBUTIONS.md` — ghi công có chủ đích.
+- **Lịch sử git:** MSSV còn trong commit `f26f8c3` (thêm) và `3c3733c` (gỡ) của `CONTRIBUTIONS.md` — đã đẩy lên
+  GitHub; chỉ xóa được bằng viết lại lịch sử. Email tác giả nằm trong metadata commit.
+
+**Gọn chú thích** (không đổi logic): `scripts/lib/impersonation.js`, `scripts/lib/iet-verify.js`,
+`scripts/impersonation-experiment.js`, `scripts/seed-sepolia.js`, `scripts/collect-evidence.js`, `test/Csp.test.js`,
+`contracts/attack/IetStyleRegistry.sol` — bỏ chú thích lặp lại tên kịch bản, ghi chú lịch sử sửa lỗi, rút gọn đầu tệp.
+`app/app.js` và `contracts/CredentialRegistry.sol` không đổi trong đợt này.
+
+**Quét lại:** 200 passing; coverage `CredentialRegistry.sol` 100 / 99,26 / 100 / 100; Slither 10 kết quả, 0 High/Medium;
+`page-integrity --check` khớp.
+

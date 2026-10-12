@@ -129,12 +129,12 @@ const KEY_STORE    = "credverify.offchain";
 const KEY_RECEIPTS = "credverify.receipts";   // bản sao biên nhận các lô đăng từ trình duyệt này
 const KEY_LEDGER   = "credverify.ledger";
 
-const CONTRACT_ADDRESS  = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
-const EXPECTED_CHAIN_ID = 31337n;   // 11155111n cho Sepolia
+const CONTRACT_ADDRESS  = "0x672e08DBF5Ce118a235E36C235b53Fa251dDe7F6";   // bản V3 trên Sepolia (docs/sepolia-evidence.md)
+const EXPECTED_CHAIN_ID = 11155111n;   // Sepolia; chạy local: 31337n và địa chỉ scripts/deploy.js in ra
 // Block chứa giao dịch deploy contract chính thức. Mọi truy vấn event bắt đầu từ đây
 // thay vì từ block 0 — trên Sepolia (~10 triệu block) quét từ 0 là >1.000 lời gọi RPC
 // mỗi bộ lọc và bị RPC công khai chặn. scripts/deploy.js in ra giá trị cần điền.
-const DEPLOY_BLOCK = 0;
+const DEPLOY_BLOCK = 11890480;   // chạy local: 0
 
 let provider, signer, contract, account, contractAddress;
 
@@ -143,7 +143,7 @@ let provider, signer, contract, account, contractAddress;
    sai) không còn tự quyết được kết luận. Khi deploy công khai, liệt kê 2–3 nhà cung cấp khác
    nhau VÀ thêm đúng các host đó vào connect-src của CSP ở đầu trang.
    Phần tử đầu là RPC chính (danh bạ, nhật ký). */
-const RPC_URLS = ["http://127.0.0.1:8545"];
+const RPC_URLS = ["https://ethereum-sepolia-rpc.publicnode.com", "https://sepolia.drpc.org"];   // chạy local: ["http://127.0.0.1:8545"]
 let readProvider = null, readContract = null, readContracts = [];
 
 function initReadOnly() {

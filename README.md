@@ -7,7 +7,7 @@ Hệ thống cấp, xác minh và thu hồi chứng chỉ khóa học trên bloc
   xử lý **khóa bị lộ** (thu hồi phá hoại bị vô hiệu, bằng giả bị gắn cờ) và chuyển giao danh tính
   qua **độ trễ chuyển giao** (tham số lúc deploy, bất biến: mặc định 48 giờ; bản demo có thể đặt 1 phút); tên đơn vị
   kiểm trên chuỗi theo **danh sách cho phép chữ tiếng Việt**; thu hồi trong lô chỉ nhận **lá thật** của cây
-- Bộ kiểm thử tự động **191 test** — phủ luồng thuận, hành vi sai bị chặn, và kịch bản phục hồi sự cố — cộng một bộ **fuzz bất biến** Foundry (10 bất biến, 80.000 lời gọi ngẫu nhiên mỗi lần chạy)
+- Bộ kiểm thử tự động **200 test** — phủ luồng thuận, hành vi sai bị chặn, và kịch bản phục hồi sự cố — cộng một bộ **fuzz bất biến** Foundry (10 bất biến, 80.000 lời gọi ngẫu nhiên mỗi lần chạy)
 - Ứng dụng web tĩnh (`index.html` + `app.js` + `app.css`, không backend, không bước build) với 6 tab; **ba tab chạy không cần ví**
 - Script tự chạy kịch bản nghiệm thu và sinh `EVIDENCE.md` kèm số đo thật
 
@@ -47,7 +47,7 @@ Lần đầu chạy sẽ mất thêm thời gian vì Hardhat tải bộ biên d�
 npx hardhat test
 ```
 
-Bộ test có **191 test** trong năm tệp. Trên `CredentialRegistry.sol` (`npx hardhat coverage`):
+Bộ test có **200 test** trong sáu tệp. Trên `CredentialRegistry.sol` (`npx hardhat coverage`):
 **100% câu lệnh, 100% hàm, 100% dòng, 99,26% nhánh** — nhánh duy nhất chưa phủ là một kiểm tra
 phòng thủ chiều sâu trong `acceptOwnership` mà mã hiện tại không thể đi tới (giải thích trong
 `docs/AUDIT-V3.md`).
@@ -58,10 +58,25 @@ phòng thủ chiều sâu trong `acceptOwnership` mà mã hiện tại không th
 | `test/CredentialRegistryV3.test.js` | 109 test cho phần của V3, chia năm nhóm: **A–E** bất biến owner ≠ issuer qua chuyển quyền · xoay khóa từ Disabled và cửa sổ khôi phục 7 ngày · danh tính O(1) · cấp theo lô (đăng, xác minh, bị chặn, thu hồi lá / cả lô) · tên lưu theo danh tính, giới hạn 256 byte · issuer là ví multisig. **S1–S7** ba PoC của kiểm toán lượt 1 (đảo kỳ vọng) · thu hồi do khóa lộ bị vô hiệu · cờ `issuedAfterCompromise` · độ trễ chuyển giao, hạn đề xuất, hủy, kiểm lại lúc thực thi · `predecessorOf` · tên dạng chuẩn · hủy đề cử owner. **W–G** danh sách cho phép tên tiếng Việt (đủ 134 chữ; chặn NBSP, ký tự vô hình, NFD, Kirin, Hy Lạp, dấu chấm, ký tự đặc biệt, gạch dài; **khớp `scripts/lib/name.js` trên 300 tên ngẫu nhiên**) · mốc công bố lộ khóa · `effectiveStatus` · PoC lượt 2. **V34-01** `revokeLeaf` chỉ nhận lá thật. **V341-01** `INHERIT_DELAY` là tham số deploy, quy tắc của `scripts/lib/delay.js` |
 | `test/Csp.test.js` | CSP/SRI của giao diện: `connect-src` khớp `RPC_URLS`, không script nội tuyến, không `'unsafe-inline'` cho script, integrity (nếu có) khớp `app.js`/`app.css`, không Google Fonts |
 | `test/UiShared.test.js` | Giao diện và script dùng cùng quy tắc — đọc thẳng hàm thật trong `app/app.js`: chuẩn hóa tên và danh sách cho phép (`app.js` ≡ `scripts/lib/name.js`), **cây Merkle dựng trong trình duyệt ≡ OpenZeppelin** (root, lá, proof với n = 1…50) và qua được `verifyInBatch`, `inner` ≡ `leafInnerOf` (thu hồi trong lô), `certId` ≡ contract, **thống kê kiểm toán theo đơn vị** khớp kịch bản khóa bị đánh cắp |
+| `test/Impersonation.test.js` | **Thí nghiệm mạo danh có đối chứng** (9 test): tám kịch bản kiểu Block.co chạy trên CredVerify và trên contract đối chứng tái hiện hệ thống IET 2026; khẳng định kết quả ở **cả hai** phía (phía đối chứng phải bị tấn công thành công). Chi tiết ở mục *Thí nghiệm mạo danh* dưới |
 | `test/XssViaRevertString.test.js` | Bằng chứng cho XSS qua chuỗi lỗi: dựng thẳng đối tượng lỗi như một RPC độc hại hoặc một revert `Error(string)` trả về (không cần contract tấn công), dùng **đúng** `reasonOf()` và `esc()` của giao diện (đọc từ `app/app.js`), và kiểm **mọi** chỗ dùng `reasonOf()` trong `app.js` đều qua `bannerText`/`esc`/`alert` |
 
 Mỗi test deploy một contract mới qua `beforeEach` nên các test độc lập hoàn toàn, đổi thứ tự
-chạy không ảnh hưởng kết quả. Nếu tất cả hiện chữ xanh (passing), logic lõi đúng như thiết kế.
+chạy không ảnh hưởng kết quả (riêng `Impersonation.test.js` chạy một kịch bản liên tục trong `before` rồi kiểm từng bước). Nếu tất cả hiện chữ xanh (passing), logic lõi đúng như thiết kế.
+
+### Thí nghiệm mạo danh có đối chứng
+
+```bash
+npx hardhat run scripts/impersonation-experiment.js   # sinh docs/IMPERSONATION.md
+```
+
+Tái hiện lớp tấn công Block.co (arXiv 06/2026): kẻ tấn công *tự khai* mình là một trường thật. Cùng tám kịch bản
+(tự đăng ký đúng tên nạn nhân, ví lạ ghi lên sổ, bằng giả khai là của nạn nhân, lò bằng được công nhận giả làm nạn nhân,
+tên gần giống, sửa nội dung, khóa lộ, đơn vị biến mất) chạy trên CredVerify và trên **đối chứng** tái hiện ngữ nghĩa
+hệ thống *Micro-credentials Batching* (IET Blockchain 2026; `contracts/attack/IetStyleRegistry.sol`,
+`scripts/lib/iet-verify.js`). Kết quả: đối chứng thua E1–E5 và E7, mất khả năng xác minh ở E8; CredVerify chặn E1–E4 và
+E6, chặn một phần E5 (tên bỏ dấu hoặc thêm hậu tố vẫn công nhận được — giao diện cảnh báo trường hợp bỏ dấu), và ở E7
+chỉ vô hiệu được bằng giả **sau khi** owner phản ứng. Bảng đầy đủ và giới hạn: `docs/IMPERSONATION.md`.
 
 ### Fuzz bất biến (Foundry)
 
@@ -187,6 +202,9 @@ dưới 24 giờ.
 
 Cần MetaMask cài trong trình duyệt.
 
+**Dùng bản trên Sepolia (mặc định của repo):** chỉ cần Bước 4. Xác minh không cần ví; thao tác ghi cần MetaMask ở mạng
+Sepolia (chainId `11155111`). **Dùng mạng local:** làm Bước 1–4 và đổi hằng neo như cuối mục này.
+
 **Bước 1** — chạy mạng local và deploy (Mục 6 ở trên). Ghi lại địa chỉ contract in ra.
 
 **Bước 2** — thêm mạng local vào MetaMask:
@@ -207,9 +225,16 @@ duyệt chặn trên `file://` — luôn phục vụ qua HTTP.
 Giao diện **không nhận địa chỉ contract từ người dùng**. Địa chỉ, chainId và block deploy được ghi
 cố định trong mã nguồn trang — `app/app.js` (`CONTRACT_ADDRESS`, `EXPECTED_CHAIN_ID`, `DEPLOY_BLOCK`).
 
-Trên mạng Hardhat local, địa chỉ deploy là **tất định** nên giá trị mặc định đúng ngay. Nếu deploy
-ra địa chỉ khác, `scripts/deploy.js` sẽ in ra đúng dòng cần sửa trong `app/app.js`.
-Không có cách nào trỏ trang sang một contract khác ngoài sửa mã nguồn. Lập trình viên thử contract riêng thì sửa ba hằng số trên.
+**Bản trong repo neo vào contract trên Sepolia** (README mục 12.0, `EVIDENCE.md` mục 2b) và đọc qua hai RPC công cộng
+độc lập. Không có cách nào trỏ trang sang một contract khác ngoài sửa mã nguồn. Muốn chạy giao diện với mạng local:
+
+1. `node scripts/page-integrity.js --dev` — gỡ SRI, nếu không trình duyệt sẽ chặn `app.js` vừa sửa;
+2. trong `app/app.js` đặt `CONTRACT_ADDRESS` theo dòng `scripts/deploy.js` in ra (Hardhat local deploy tất định ra
+   `0x5FbDB2315678afecb367f032d93F642f64180aa3`), `EXPECTED_CHAIN_ID = 31337n`, `DEPLOY_BLOCK = 0`,
+   `RPC_URLS = ["http://127.0.0.1:8545"]` (mỗi dòng có sẵn chú thích giá trị local);
+3. `node scripts/page-integrity.js` — đồng bộ `connect-src` của CSP theo `RPC_URLS`.
+
+Đừng commit bản đã sửa sang local; khôi phục bằng `git checkout app/`.
 
 ### Sáu tab
 
@@ -318,7 +343,9 @@ xác minh, các hành vi bị chặn, thu hồi, xác minh lại — rồi ghi `
 | Mục | Nội dung | Nguồn |
 |---|---|---|
 | 1–3 | Môi trường, contract đã deploy, tài khoản demo | Đo lúc chạy |
+| 2b | Bản triển khai trên Sepolia, gas sau Glamsterdam | Đọc từ `docs/sepolia-evidence.md` |
 | 4–7 | Giao dịch chính, event, thay đổi trạng thái, hành vi bị chặn | Đo lúc chạy |
+| 7b | Thí nghiệm mạo danh có đối chứng (tám kịch bản, CredVerify và đối chứng IET 2026) | **Chạy thật lúc sinh tệp** |
 | 8 | Đối chiếu thao tác giao diện với hàm contract | Cố định |
 | 9 | Độ trễ và chi phí — gas, latency ghi/đọc, 30 mẫu mỗi thao tác | Đo lúc chạy |
 | 10 | Kết quả kiểm thử tự động | **Chạy thật lúc sinh tệp** |
@@ -338,8 +365,10 @@ Lưu ý: script deploy một contract **mới** mỗi lần chạy, nên địa 
 contracts/CredentialRegistry.sol   -> smart contract lõi V3 (thành phần on-chain)
 contracts/legacy/CredentialRegistryV2.sol -> bản V2 giữ nguyên, CHỈ để đo gas so sánh
 contracts/test/MultiSigIssuerMock.sol     -> ví đa chữ ký tối giản, CHỈ dùng trong test
+contracts/attack/IetStyleRegistry.sol     -> ĐỐI CHỨNG cho thí nghiệm mạo danh (ngữ nghĩa hệ thống IET 2026), không thuộc CredVerify
 test/CredentialRegistry.test.js    -> bộ test V2, cập nhật cho V3
 test/CredentialRegistryV3.test.js  -> bộ test phần mới của V3
+test/Impersonation.test.js        -> thí nghiệm mạo danh có đối chứng (khẳng định kết quả cả hai phía)
 test/XssViaRevertString.test.js    -> bằng chứng chống XSS qua chuỗi lỗi từ RPC / revert
 test/UiShared.test.js              -> giao diện và script dùng cùng quy tắc (đọc hàm thật từ app/app.js)
 test/foundry/Invariants.t.sol      -> fuzz bất biến Foundry: 10 bất biến, handler gọi ngẫu nhiên mọi hàm ghi
@@ -356,9 +385,13 @@ scripts/scale-probe.js             -> chứng minh chi phí không đổi theo s
 scripts/scale-names.js             -> đo chi phí lưu tên và giới hạn của các hàm duyệt danh bạ đã gỡ
 scripts/lib/directory.js           -> dựng danh bạ từ event (cùng thuật toán với giao diện)
 scripts/lib/name.js                -> quy tắc tên đơn vị: chuẩn hóa + danh sách cho phép chữ tiếng Việt — dùng chung với giao diện, contract kiểm lại
+scripts/lib/sepolia.js             -> mục 2b của EVIDENCE.md, đọc từ docs/sepolia-evidence.md
+scripts/impersonation-experiment.js -> chạy thí nghiệm mạo danh, sinh docs/IMPERSONATION.md
+scripts/lib/impersonation.js       -> tám kịch bản + quy tắc kết luận (dùng chung cho test, script, EVIDENCE)
+scripts/lib/iet-verify.js          -> logic trang xác minh của hệ thống đối chứng (IET 2026, commit b9b68f4)
 scripts/page-integrity.js          -> đồng bộ connect-src theo RPC_URLS; --release gắn SRI cho app.js/app.css; --check
 app/index.html                     -> khung trang 6 tab + CSP (không có script nội tuyến)
-app/app.js                         -> toàn bộ mã giao diện, gồm 3 hằng số neo và RPC_URLS
+app/app.js                         -> toàn bộ mã giao diện, gồm 3 hằng số neo (trỏ bản Sepolia) và RPC_URLS
 app/app.css                        -> kiểu dáng
 hardhat.config.js                  -> cấu hình Hardhat
 foundry.toml                       -> cấu hình Foundry, chỉ cho fuzz bất biến
@@ -368,6 +401,8 @@ docs/GAS-BASELINE.md               -> số đo gas qua ba phiên bản kiến tr
 docs/GAS-V3.md                     -> số đo gas V3 (sinh bởi scripts/gas-v3.js)
 docs/AUDIT-V3.md                   -> nhật ký kiểm toán: lỗi đã tìm, đã sửa và còn mở của V3, theo từng đợt
 docs/SCALE-NAMES.md                -> số đo khả năng mở rộng của việc lưu tên đơn vị
+docs/IMPERSONATION.md              -> thí nghiệm mạo danh có đối chứng: thiết kế, kết quả, giới hạn
+docs/sepolia-evidence.md           -> bản triển khai Sepolia: địa chỉ, 8 giao dịch, đối chiếu gas local/Glamsterdam
 docs/archive/                      -> kiến trúc V1 đã bị bác bỏ: contract, 57 test
 .env.example                       -> mẫu biến môi trường
 picture/logo.png                   -> biểu tượng trang (ảnh chụp màn hình sẽ thêm sau khi deploy Sepolia)
@@ -523,8 +558,8 @@ Khi đưa vào vận hành thật cần:
 |---|---|---|---|
 | Owner, issuer | Ví một khóa | Ví đa chữ ký (Safe k-trên-n, khuyến nghị 2-trên-3) | Giả định tin cậy, mục 11 và `docs/AUDIT-V3.md` 14.3 |
 | `INHERIT_DELAY` | `INHERIT_DELAY_SECONDS` trong `.env` (ví dụ 60 hoặc 3600) | Mặc định 48 giờ — để trống biến này | Tham số constructor (V341-01), bất biến; script từ chối < 24 giờ trên mạng thật |
-| `RPC_URLS` | Một RPC local | 2–3 RPC độc lập | Kết quả xác minh chỉ kết luận khi các RPC khớp nhau |
-| Phát hành trang | Bản phát triển, không SRI | `page-integrity.js --release` (SRI) và host đặt được HTTP header (`frame-ancestors`) | Mục 7 và 11 |
+| `RPC_URLS` | Hai RPC công cộng (publicnode, dRPC), không khóa API | 2–3 RPC độc lập, có cam kết dịch vụ | Kết quả xác minh chỉ kết luận khi các RPC khớp nhau |
+| Phát hành trang | Bản phát hành (SRI) trong repo, chạy bằng `npx http-server app` | `page-integrity.js --release` (SRI) và host đặt được HTTP header (`frame-ancestors`) | Mục 7 và 11 |
 | Danh bạ, nhật ký, thống kê | Trình duyệt tự quét event | **Indexer** | Mục 12.1 |
 
 ### 12.0. Triển khai lên Sepolia (bản V3 chính thức trên testnet)
@@ -546,6 +581,20 @@ Khi đưa vào vận hành thật cần:
    `RPC_URLS` với 2–3 RPC độc lập (script in sẵn). Chạy `node scripts/page-integrity.js --release`, rồi phát hành
    thư mục `app/` trên host đặt được header.
 6. **Ghi bằng chứng:** dán `docs/sepolia-evidence.md` vào EVIDENCE hoặc bài, kèm địa chỉ trên Etherscan.
+
+**Không dùng URL RPC có khóa API (Alchemy, Infura) cho giao diện.** `app.js` là mã công khai; `SEPOLIA_RPC_URL` trong
+`.env` chỉ để script deploy dùng. `seed-sepolia.js` không ghi URL này ra tệp.
+
+**Bản đã triển khai (11/10/2026):** contract
+[`0x672e08DBF5Ce118a235E36C235b53Fa251dDe7F6`](https://sepolia.etherscan.io/address/0x672e08DBF5Ce118a235E36C235b53Fa251dDe7F6#code),
+block 11890480, mã nguồn đã xác minh (Exact Match). `INHERIT_DELAY` = 60 giây — **cấu hình demo** để trình diễn chuyển
+giao trong buổi bảo vệ; production dùng 48 giờ. Tám giao dịch mẫu (công nhận, cấp lẻ, thu hồi, đăng lô, thu hồi một lá)
+và trạng thái đọc lại ghi ở `docs/sepolia-evidence.md`; `app/app.js` đã neo vào bản này.
+
+**Gas trên Sepolia cao hơn số đo local** (deploy 22.497.316 so với 3.177.142; các thao tác ghi gấp 2,4–4,1 lần). Lý do:
+Sepolia bật nâng cấp Glamsterdam ngày 06/10/2026, trong đó EIP-8037 tính giá tạo state mới khoảng 1.530 gas mỗi byte.
+Mainnet chưa có ngày kích hoạt, nên số gas trong `EVIDENCE.md` và `docs/GAS-V3.md` (Hardhat, hardfork Osaka) vẫn là
+luật mainnet hiện hành. Bảng đối chiếu từng thao tác ở cuối `docs/sepolia-evidence.md`.
 
 ### 12.1. Indexer cho danh bạ, nhật ký và thống kê
 

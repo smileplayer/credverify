@@ -19,6 +19,8 @@ const path = require("path");
 
 const { execSync } = require("child_process");
 const { buildDirectory } = require("./lib/directory");
+const { sepoliaSection } = require("./lib/sepolia");
+const impersonation = require("./lib/impersonation");
 
 function runTests() {
   const t0 = process.hrtime.bigint();
@@ -360,6 +362,9 @@ async function main() {
   }
 
   // ---------- Chạy lại bộ kiểm thử để lấy số liệu THẬT ----------
+  // Phải chạy trước `npx hardhat test`: chờ test lâu thì kết nối keep-alive tới node bị đóng.
+  console.log("Đang chạy thí nghiệm mạo danh có đối chứng…");
+  const imp = await impersonation.run(hre, { delay: 60 });
   console.log("Đang chạy lại npx hardhat test để lấy kết quả thật…");
   const T = runTests();
   console.log("  →", T.passing, "passing,", T.failing, "failing");
@@ -401,6 +406,7 @@ async function main() {
   md += "| Độ trễ deploy | " + fmt(ms2(deployMs) + " ms") + " |\n";
   md += "| ABI | sinh ra tại `artifacts/contracts/CredentialRegistry.sol/CredentialRegistry.json` |\n\n";
 
+  md += sepoliaSection();
   md += "## 3. Tài khoản demo\n\n";
   md += "Các tài khoản do `npx hardhat node` sinh ra, chỉ dùng cho mạng local. ";
   md += "**Không có private key nào được ghi vào tệp này.**\n\n";
@@ -471,6 +477,12 @@ async function main() {
   });
   md += "\n";
 
+  md += "## 7b. Thí nghiệm mạo danh đơn vị cấp có đối chứng\n\n";
+  md += "Cùng tám kịch bản chạy trên CredVerify và trên contract đối chứng tái hiện ngữ nghĩa hệ thống *Micro-credentials Batching* " +
+    "(IET Blockchain 2026; repo `nnieru/academic-record-managment`, commit `b9b68f4`), nơi danh tính đơn vị cấp là tự khai — " +
+    "nguyên nhân gốc của tấn công Block.co. Phương pháp, quy tắc kết luận và giới hạn: `docs/IMPERSONATION.md`. " +
+    "Kết quả được khẳng định bởi `test/Impersonation.test.js`.\n\n";
+  md += impersonation.resultTable(imp) + "\n\n";
   md += "## 8. Đối chiếu thao tác giao diện với giao dịch trên chuỗi\n\n";
   md += "| Thao tác trên giao diện `app/` | Hàm contract | Thay đổi trạng thái |\n|---|---|---|\n";
   md += "| Quản trị → Công nhận | `addIssuer(address,string)` | `issuerStatus` None→Active, `nameHolder[keccak(tên)]`, event `IssuerAdded` |\n";
@@ -540,8 +552,9 @@ async function main() {
   md += "2. **Độ trễ đọc thì có ý nghĩa hơn.** Thao tác `view` không cần đồng thuận nên số đo ở đây phản ánh ";
   md += "đúng bản chất: xác minh là thao tác rẻ và nhanh. Trên mạng thật, phần tăng thêm chủ yếu là độ trễ ";
   md += "mạng tới node RPC, không phải chi phí tính toán.\n";
-  md += "3. **Gas thì không phụ thuộc mạng.** Lượng gas ở Mục 9.2 đúng trên mọi mạng EVM; chỉ có ";
-  md += "*giá* mỗi đơn vị gas là thay đổi theo mạng và theo thời điểm.\n";
+  md += "3. **Gas phụ thuộc luật của hardfork, không phụ thuộc tốc độ mạng.** Mục 9.2 đo theo hardfork Osaka (Fusaka) — ";
+  md += "luật mainnet hiện hành. Mạng đã nâng cấp khác có thể tính khác: Sepolia sau Glamsterdam (EIP-8037) tính tạo ";
+  md += "state mới đắt hơn nhiều (Mục 2b). *Giá* mỗi đơn vị gas thì thay đổi theo mạng và theo thời điểm.\n";
   md += "4. **Số đo phụ thuộc máy chạy.** Chạy lại trên máy khác sẽ ra con số khác. Đây là lý do bảng trên ";
   md += "báo trung vị và p95 thay vì một giá trị đơn lẻ.\n\n";
 
@@ -620,7 +633,7 @@ async function main() {
         r.branch.toFixed(2) + " | " + r.funcs.toFixed(2) + " |\n";
     });
     md += "\n";
-    md += "`contracts/test/MultiSigIssuerMock.sol` là ví mẫu chỉ dùng trong test; `contracts/legacy/CredentialRegistryV2.sol` chỉ dùng để đo gas so sánh. ";
+    md += "`contracts/test/MultiSigIssuerMock.sol` là ví mẫu chỉ dùng trong test; `contracts/legacy/CredentialRegistryV2.sol` chỉ dùng để đo gas so sánh; `contracts/attack/IetStyleRegistry.sol` là contract đối chứng của thí nghiệm mạo danh (mục 7b), không thuộc CredVerify. ";
     md += "Nhánh duy nhất chưa phủ trong `CredentialRegistry.sol` là kiểm tra thừa trong `acceptOwnership` — phòng thủ chiều sâu, không đến được với mã hiện tại (xem `docs/AUDIT-V3.md`).\n\n";
   }
 
@@ -666,8 +679,8 @@ async function main() {
 
   md += "## 12. Ảnh chụp màn hình\n\n";
   md += "Bộ 11 ảnh cũ chụp **giao diện V2** (còn mục \"Nâng cao\", ô \"tra tất cả đơn vị\", chuỗi revert thay vì custom error) ";
-  md += "nên đã được gỡ khỏi repo vì không còn khớp giao diện V3. Ảnh mới sẽ chụp trên bản triển khai Sepolia ";
-  md += "(README mục 12.0) và đặt ở `picture/screenshots/`. Trong lúc chờ, bằng chứng giao diện là các kịch bản e2e chạy thật ";
+  md += "nên đã được gỡ khỏi repo vì không còn khớp giao diện V3. Bản V3 đã triển khai trên Sepolia (Mục 2b); ảnh mới chụp ";
+  md += "giao diện chạy trên bản đó và đặt ở `picture/screenshots/`. Trong lúc chờ, bằng chứng giao diện là các kịch bản e2e chạy thật ";
   md += "trên Chromium ghi ở `docs/AUDIT-V3.md`.\n\n";
 
   md += "## 13. So sánh với baseline tập trung (Proposal mục 2.1 và mục 6)\n\n";
