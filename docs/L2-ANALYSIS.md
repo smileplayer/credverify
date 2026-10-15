@@ -216,10 +216,14 @@ neo state root đó về output root/bằng chứng hợp lệ đã đăng trên
 
 **Khuyến nghị (không sửa contract):**
 
-1. **Sàn `INHERIT_DELAY` theo chuỗi** (đầu vào cho thẻ T10, tác giả quyết): theo Bảng 1, sàn 24 giờ hiện tại có biên
-   +12 giờ trên Base, 0 trên Arbitrum, âm trên Scroll. Hai phương án: giữ sàn 24 giờ và ghi rủi ro; hoặc để
-   `scripts/lib/delay.js` đặt sàn = D của chuỗi + biên phản ứng (ví dụ Arbitrum 24 giờ + biên). Với Scroll, không giá
-   trị nào trong [1 phút, 7 ngày] cho biên dương.
+1. **Sàn `INHERIT_DELAY` — quyết định (15/10/2026): giữ sàn 24 giờ chung cho mọi mạng thật**, không đặt sàn theo chuỗi
+   trong `scripts/lib/delay.js`. Lý do: đề tài không triển khai lên L2; sàn là chốt chặn tối thiểu của script, không thay
+   được việc người triển khai chọn giá trị theo chuỗi. **Rủi ro được chấp nhận và công bố** (Bảng 1): sàn 24 giờ có biên
+   +12 giờ trên Base, **0 trên Arbitrum One**, âm trên Scroll; mặc định 48 giờ có biên +36 / +24 / âm. Người triển khai
+   trên L2 phải tự chọn `INHERIT_DELAY` ≥ D của chuỗi + thời gian phát hiện và phản ứng (ví dụ Arbitrum One: không dưới
+   48 giờ). Với Scroll, không giá trị nào trong [1 phút, 7 ngày] cho biên dương — không khuyến nghị đặt sổ trên Scroll
+   khi chưa sửa contract. Phương án bị bác: sàn theo chainId trong script (thêm bảng tham số phải cập nhật khi L2 đổi cấu
+   hình, và vẫn không giải được Scroll).
 2. **Lùi mốc lộ thêm biên lùi dấu thời gian** của chuỗi (Arbitrum: 24 giờ), như mục 3.2.
 3. **Gửi giao dịch phòng thủ song song qua đường L1** (deposit/delayed inbox/enforced tx) ngay khi phát hiện sự cố,
    không chờ xem sequencer có kiểm duyệt hay không — đây là giả định "gửi ngay khi cửa sổ mở" của Bảng 1.

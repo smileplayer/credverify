@@ -576,7 +576,7 @@ Khi đưa vào vận hành thật cần:
 | Hạng mục | Bản thử nghiệm | Triển khai thật | Ghi chú |
 |---|---|---|---|
 | Owner, issuer | Ví một khóa | Ví đa chữ ký (Safe k-trên-n, khuyến nghị 2-trên-3) | Giả định tin cậy, mục 11 và `docs/AUDIT-V3.md` 14.3 |
-| `INHERIT_DELAY` | `INHERIT_DELAY_SECONDS` trong `.env` (ví dụ 60 hoặc 3600) | Mặc định 48 giờ — để trống biến này | Tham số constructor (V341-01), bất biến; script từ chối < 24 giờ trên mạng thật |
+| `INHERIT_DELAY` | `INHERIT_DELAY_SECONDS` trong `.env` (ví dụ 60 hoặc 3600) | Mặc định 48 giờ — để trống biến này | Tham số constructor (V341-01), bất biến; script từ chối < 24 giờ trên mạng thật. Trên L2 chọn ≥ độ trễ forced inclusion của chuỗi + thời gian phản ứng (Arbitrum One: ≥ 48 giờ) — `docs/L2-ANALYSIS.md` Bảng 1 |
 | `RPC_URLS` | Ba RPC công cộng không khóa API (Tenderly, publicnode, dRPC) | 2–3 RPC độc lập, có cam kết dịch vụ; RPC lưu trữ (archive) hoặc indexer cho event | Xác minh chỉ kết luận khi các RPC khớp nhau. Event đọc qua `getLogsRobust`: thử lần lượt từng RPC, tự chia nhỏ khúc khi bị giới hạn khoảng, lỗi thì báo chứ không hiện danh bạ rỗng. RPC công cộng có thể xóa log cũ (đo 14/10/2026: publicnode đã xóa log sau ~3 ngày, dRPC miễn phí chỉ nhận ~100 block/lần) |
 | Phát hành trang | Bản phát hành (SRI) trong repo, chạy bằng `npx http-server app` | `page-integrity.js --release` (SRI) và host đặt được HTTP header (`frame-ancestors`) | Mục 7 và 11 |
 | Danh bạ, nhật ký, thống kê | Trình duyệt tự quét event | **Indexer** | Mục 12.1 |

@@ -2,6 +2,9 @@
 //   - mặc định 48 giờ (thiết kế production);
 //   - biến môi trường INHERIT_DELAY_SECONDS đặt giá trị khác (ví dụ 60 hoặc 3600 cho bản demo);
 //   - trên mạng KHÔNG phải local/testnet, từ chối giá trị dưới 24 giờ (contract bất biến sau deploy).
+// Sàn 24 giờ là chung cho mọi chuỗi, kể cả L2. Trên rollup, độ trễ tối đa của đường forced inclusion (Base 12 giờ,
+// Arbitrum One 24 giờ, Scroll 7 ngày) ăn vào cửa sổ hủy đề xuất — người triển khai phải tự chọn giá trị lớn hơn;
+// xem docs/L2-ANALYSIS.md, Bảng 1 và mục 7.
 
 const HOUR = 3600;
 const PRODUCTION_DEFAULT = 48 * HOUR;

@@ -1235,3 +1235,25 @@ sinh tài liệu dùng dữ liệu ngẫu nhiên nên mỗi lần chạy ra số
 
 **Quét lại.** 205 passing; coverage `CredentialRegistry.sol` 100 / 99,26 / 100 / 100; clean + compile; `page-integrity
 --check` khớp; e2e 21/21; `gas-v3.js` chạy hai lần ra cùng tệp. Contract và `app/` không đổi.
+
+## 30. Đợt 22 (15/10/2026) — chốt sàn `INHERIT_DELAY` trên L2, CI, quét dữ liệu cá nhân
+
+**Sàn `INHERIT_DELAY` (T10, phương án A).** Giữ sàn 24 giờ chung cho mọi mạng thật trong `scripts/lib/delay.js` (logic
+không đổi, thêm chú thích). Rủi ro trên L2 được công bố thay vì vá bằng bảng tham số theo chuỗi: sàn 24 giờ có biên +12
+giờ (Base), 0 (Arbitrum One), âm (Scroll) so với độ trễ forced inclusion; người triển khai trên L2 phải tự chọn giá trị
+lớn hơn (Arbitrum One ≥ 48 giờ); Scroll không có giá trị hợp lệ nào cho biên dương. Ghi ở `docs/L2-ANALYSIS.md` mục 7
+và README mục 12 (bảng hướng triển khai).
+
+**CI (T6).** Thêm `.github/workflows/ci.yml`: job `test` (`npm ci`, compile, `npx hardhat test`, `page-integrity
+--check`) và job `e2e` (Playwright Chromium, `npm run test:e2e`). Không dùng secret nào. Trên CI không có
+`receipts/sepolia-demo/` nên e2e tự sinh lô mới — đã chạy thử đúng điều kiện đó trên máy (tạm dời thư mục biên nhận):
+21/21. YAML kiểm bằng js-yaml.
+
+**Quét dữ liệu cá nhân / khóa (T13, phần quét).** Mọi tệp được git theo dõi: không có MSSV, email, đường dẫn máy, URL RPC
+có khóa API hay khóa riêng; 30 chuỗi hex 64 ký tự còn lại đều là hash giao dịch / certHash (EVIDENCE, sepolia-evidence);
+`.env.example` chỉ có khóa toàn số 0. `.env`, `demo-issuer.key`, `receipts/` nằm trong `.gitignore`. Tên tác giả trong
+`LICENSE`, `CONTRIBUTIONS.md`, `package.json` là có chủ đích. MSSV trong lịch sử git (`f26f8c3`, `3c3733c`) giữ nguyên
+theo quyết định của tác giả.
+
+**Quét lại.** 205 passing; e2e 21/21 (cả khi có và không có biên nhận Sepolia); `page-integrity --check` khớp. Contract
+và `app/` không đổi → không chạy lại coverage/Slither/fuzz.

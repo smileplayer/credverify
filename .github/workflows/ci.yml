@@ -1,0 +1,45 @@
+# Kiểm tra tự động trên mỗi push và pull request: test Mocha, CSP/SRI của giao diện, e2e Playwright.
+# Không dùng secret nào: không deploy, không gọi RPC thật (e2e chặn mọi request ra ngoài, chạy trên node local).
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      REPORT_GAS: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx hardhat compile
+      - run: npx hardhat test
+      - run: node scripts/page-integrity.js --check
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: test
+    env:
+      REPORT_GAS: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx hardhat compile
+      - run: npx playwright install --with-deps chromium
+      # Không có receipts/sepolia-demo/ (bị .gitignore) nên bộ e2e tự sinh lô mới vào test/e2e/.tmp/.
+      - run: npm run test:e2e
