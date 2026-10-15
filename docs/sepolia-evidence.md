@@ -43,6 +43,7 @@ Lô `0xd3a5c833a8818b3ca72d9734702d4b8933c022f5ff5f38dd55291caf46c77e7c` (root `
 | `lo-demo-3.txt` (đã thu hồi lá) | false | true | true |
 
 Biên nhận của lô ghi ở `receipts/sepolia-demo/` (không commit — chứa salt).
+Cùng thư mục có các tệp sinh tại chỗ để nạp lại vào giao diện: `lo-demo-1..3.txt` (lá trong lô; `lo-demo-3.txt` đã thu hồi lá) và `chung-chi-le-da-thu-hoi.txt` (chứng chỉ lẻ thứ hai, đã thu hồi) — từ 15/10/2026 `scripts/seed-sepolia.js` tự ghi các tệp này cạnh biên nhận.
 
 **Cập nhật `app/app.js` trước khi phát hành trang, rồi chạy `node scripts/page-integrity.js --release`:**
 
@@ -56,8 +57,8 @@ const RPC_URLS = ["https://ethereum-sepolia-rpc.publicnode.com", "<RPC độc l�
 ## Đối chiếu gas: Sepolia (sau Glamsterdam) và luật hiện hành của mainnet
 
 Sepolia bật nâng cấp **Glamsterdam** ngày 06/10/2026 (13:53:36 UTC). Nâng cấp này gồm **EIP-8037**: tạo state mới
-(tài khoản, ô storage, bytecode contract) tính theo một đồng hồ gas riêng, khoảng 1.530 gas mỗi byte state
-(bản nháp, EIP còn ở trạng thái Review). Mainnet **chưa** có ngày kích hoạt. Hardhat 2.29 mặc định hardfork
+(tài khoản, ô storage, bytecode contract) tính theo một đồng hồ gas riêng, hằng số `CPSB` = 1.530 gas mỗi byte state
+(ô storage mới 64 byte, tài khoản mới 120 byte; EIP ở trạng thái Last Call, hạn 01/11/2026). Mainnet **chưa** có ngày kích hoạt. Hardhat 2.29 mặc định hardfork
 **Osaka (Fusaka)** — đúng luật mainnet đang chạy — nên cột "Hardhat local" là chi phí trên mainnet hiện nay.
 
 Cột "Hardhat local" đo bằng chính kịch bản này trên mạng Hardhat trong tiến trình (cùng 8 thao tác, cùng
@@ -87,6 +88,6 @@ Cột "Hardhat local" đo bằng chính kịch bản này trên mạng Hardhat t
   chứng minh hệ thống chạy thật trên mạng công khai và để nhìn trước chi phí khi mainnet nâng cấp.
 
 Nguồn: [Glamsterdam Testnet Announcement — Ethereum Foundation, 17/09/2026](https://blog.ethereum.org/2026/09/17/glamsterdam-testnet-announcement);
-[Glamsterdam Gives Ethereum a Second Gas Meter — Reactive Network](https://blog.reactive.network/glamsterdam-gives-ethereum-a-second-gas-meter/);
+[EIP-8037: State Creation Gas Cost Increase](https://eips.ethereum.org/EIPS/eip-8037);
 giao dịch deploy: [Etherscan](https://sepolia.etherscan.io/tx/0xcb1a3e642d1c2cab42463b54046286e44eb4324a9e4f4da3b759ad1c3fb1c10a).
 

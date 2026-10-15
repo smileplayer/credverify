@@ -35,6 +35,20 @@ const PUBLIC_RPCS = {
   11155111: ["https://ethereum-sepolia-rpc.publicnode.com", "https://sepolia.drpc.org"],
 };
 
+// Nội dung các tệp demo sinh tại chỗ. Dùng CHUNG cho cả lúc băm (cấp trên chuỗi) và lúc ghi
+// ra đĩa — đổi một byte là hash không còn khớp chuỗi. Không thêm xuống dòng cuối tệp.
+const REVOKED_FILE = "chung-chi-le-da-thu-hoi.txt";
+const revokedText = () => "CredVerify demo — chung chi se bi thu hoi";
+const batchText = (i, address) => `CredVerify lo demo #${i} ${address}`;
+
+// Thư mục ghi biên nhận + tệp demo. Mạng local ghi ra chỗ khác để không đè bản Sepolia
+// (biên nhận chứa salt, mất là không dựng lại được). DEMO_OUT_DIR tính từ gốc repo.
+function demoOutDir(chainId) {
+  const root = path.join(__dirname, "..");
+  if (process.env.DEMO_OUT_DIR) return path.resolve(root, process.env.DEMO_OUT_DIR);
+  return path.join(root, "receipts", chainId === 31337 ? "hardhat-demo" : "sepolia-demo");
+}
+
 function link(chainId, kind, value) {
   const base = EXPLORER[Number(chainId)];
   return base ? `${base}/${kind}/${value}` : value;
@@ -47,6 +61,13 @@ async function main() {
   if (chainId === 31337) {
     console.log("⚠ Đang chạy trên mạng local. Script này dành cho testnet công khai.");
     console.log("  Chạy lại với:  npx hardhat run scripts/seed-sepolia.js --network sepolia\n");
+  }
+
+  // Kiểm thư mục đích TRƯỚC khi tốn gas: không đè biên nhận của một lần chạy trước.
+  const rcDir = demoOutDir(chainId);
+  if (fs.existsSync(rcDir) && fs.readdirSync(rcDir).some((f) => f.endsWith(".receipt.json"))) {
+    throw new Error(`Thư mục ${rcDir} đã có biên nhận (chứa salt của lô cũ). ` +
+      "Đặt DEMO_OUT_DIR sang thư mục khác hoặc tự dời thư mục cũ đi.");
   }
 
   const signers = await hre.ethers.getSigners();
@@ -119,8 +140,8 @@ async function main() {
     registry.connect(issuerWallet).issueCertificate(hashValid, holder));
 
   // ---------- 5. Cấp rồi thu hồi một chứng chỉ thứ hai ----------
-  const hashRevoked = hre.ethers.keccak256(
-    hre.ethers.toUtf8Bytes("CredVerify demo — chung chi se bi thu hoi"));
+  const revokedBytes = Buffer.from(revokedText(), "utf8");
+  const hashRevoked = hre.ethers.keccak256(revokedBytes);
   await step("issueCertificate — cấp chứng chỉ thứ hai",
     registry.connect(issuerWallet).issueCertificate(hashRevoked, holder));
   const certIdRevoked = await registry.certIdOf(issuerWallet.address, hashRevoked);
@@ -130,7 +151,7 @@ async function main() {
   // ---------- 6. Cấp theo lô: DemoCert2.pdf + 3 tệp sinh tại chỗ ----------
   const batchItems = [
     { name: "DemoCert2.pdf", bytes: fs.readFileSync(path.join(__dirname, "..", "Demo", "DemoCert2.pdf")) },
-    ...[1, 2, 3].map((i) => ({ name: `lo-demo-${i}.txt`, bytes: Buffer.from(`CredVerify lo demo #${i} ${address}`) })),
+    ...[1, 2, 3].map((i) => ({ name: `lo-demo-${i}.txt`, bytes: Buffer.from(batchText(i, address), "utf8"), generated: true })),
   ];
   const batch = buildBatch(batchItems);
   const batchRc = await step(`publishBatch — đăng lô ${batchItems.length} chứng chỉ bằng một Merkle root`,
@@ -145,8 +166,20 @@ async function main() {
     root: batch.root, batchId, txHash: batchRc.hash, blockNumber: batchRc.blockNumber,
     issuedAt: Number((await hre.ethers.provider.getBlock(batchRc.blockNumber)).timestamp),
   };
-  const rcDir = path.join(__dirname, "..", "receipts", "sepolia-demo");
   writeReceipts(rcDir, meta, batch.entries);
+  // Ghi các tệp sinh tại chỗ cạnh biên nhận, để sau này còn nạp lại vào giao diện mà xác minh.
+  // Đọc lại từ đĩa và đối chiếu hash với giá trị đã đưa lên chuỗi.
+  const demoFiles = [
+    ...batchItems.map((it, i) => ({ ...it, certHash: batch.entries[i].certHash })).filter((it) => it.generated),
+    { name: REVOKED_FILE, bytes: revokedBytes, certHash: hashRevoked },
+  ];
+  for (const f of demoFiles) {
+    const p = path.join(rcDir, f.name);
+    fs.writeFileSync(p, f.bytes);
+    if (hre.ethers.keccak256(fs.readFileSync(p)) !== f.certHash) throw new Error("Hash tệp ghi ra không khớp chuỗi: " + p);
+  }
+  const rcRel = path.relative(path.join(__dirname, ".."), rcDir).split(path.sep).join("/");
+  console.log(`\nĐã ghi ${batch.entries.length} biên nhận + index.csv + ${demoFiles.length} tệp demo vào ${rcRel}/ (hash khớp chuỗi)`);
   const vb1 = await registry.verifyInBatch(issuerWallet.address, batch.root,
     batch.entries[0].certHash, batch.entries[0].holder, batch.entries[0].salt, batch.entries[0].proof);
   const vb4 = await registry.verifyInBatch(issuerWallet.address, batch.root,
@@ -191,7 +224,7 @@ async function main() {
   md.push(`| \`Demo/DemoCert2.pdf\` | ${vb1.valid} | ${vb1.inBatch} | ${vb1.leafRevoked} |`);
   md.push(`| \`${revokedEntry.file}\` (đã thu hồi lá) | ${vb4.valid} | ${vb4.inBatch} | ${vb4.leafRevoked} |`);
   md.push("");
-  md.push("Biên nhận của lô ghi ở `receipts/sepolia-demo/` (không commit — chứa salt).");
+  md.push(`Biên nhận của lô ghi ở \`${rcRel}/\` (không commit — chứa salt), cạnh các tệp demo ${demoFiles.map((f) => `\`${f.name}\``).join(", ")} để nạp lại vào giao diện.`);
   md.push("");
   md.push("**Cập nhật `app/app.js` trước khi phát hành trang, rồi chạy `node scripts/page-integrity.js --release`:**");
   md.push("");

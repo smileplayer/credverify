@@ -1,0 +1,2 @@
+# Sinh khi chạy e2e: fixture, biên nhận lô sinh mới (chứa salt), kết quả Playwright.
+.tmp/

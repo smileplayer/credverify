@@ -102,3 +102,84 @@ describe("Giao diện và script dùng cùng quy tắc", function () {
     expect((await reg.verifyCertificate(A.address, ethers.id("s1"))).valid).to.equal(true);
   });
 });
+
+// Đọc event qua RPC công cộng có giới hạn. Hai kiểu lỗi mô phỏng đúng thứ đã đo trên Sepolia 14/10/2026:
+//   publicnode: JSON-RPC lỗi 4444 "pruned history unavailable" (ethers bọc thành "could not coalesce error");
+//   dRPC gói miễn phí: HTTP 400, thân "ranges over 10000 blocks are not supported on free plan" (dù khoảng chỉ ~200).
+describe("Đọc event bền trước giới hạn của RPC công cộng (getLogsRobust)", function () {
+  const ui = load(["BLOCK_CHUNK", "LOG_MIN_CHUNK", "RANGE_ERR", "rpcErrText", "getLogsRobust"], ethers);
+
+  let reg, addr, deployBlock, topics, expected;
+  before(async () => {
+    const [, a, b, c] = await ethers.getSigners();
+    reg = await (await ethers.getContractFactory("CredentialRegistry")).deploy(INHERIT_DELAY);
+    deployBlock = (await reg.deploymentTransaction().wait()).blockNumber;
+    addr = await reg.getAddress();
+    await reg.addIssuer(a.address, "Trung tâm Một");
+    await ethers.provider.send("hardhat_mine", ["0x3e8"]);          // 1.000 block
+    await reg.addIssuer(b.address, "Trung tâm Hai");
+    await ethers.provider.send("hardhat_mine", ["0x1f4"]);          // 500 block
+    await reg.addIssuer(c.address, "Trung tâm Ba");
+    topics = [[reg.interface.getEvent("IssuerAdded").topicHash]];
+    expected = (await ethers.provider.getLogs({ address: addr, topics, fromBlock: deployBlock }))
+      .map((l) => l.transactionHash);
+    expect(expected.length).to.equal(3);
+  });
+
+  const base = ethers.provider;
+  const counting = (getLogs) => { const p = { calls: 0, getBlockNumber: () => base.getBlockNumber() };
+    p.getLogs = (f) => { p.calls++; return getLogs(f); }; return p; };
+  const pruned = (cutoff) => counting(async (f) => {
+    if (f.fromBlock < cutoff) throw Object.assign(new Error("could not coalesce error (payload={fromBlock,toBlock})"),
+      { shortMessage: "could not coalesce error", error: { code: 4444, message: "pruned history unavailable" } });
+    return base.getLogs(f);
+  });
+  const limited = (maxSpan) => counting(async (f) => {
+    if (f.toBlock - f.fromBlock + 1 > maxSpan) throw Object.assign(new Error("server response 400 Bad Request"),
+      { shortMessage: "server response 400 Bad Request",
+        info: { responseStatus: 400, responseBody: '{"error":{"message":"ranges over 10000 blocks are not supported on free plan","code":35}}' } });
+    return base.getLogs(f);
+  });
+  const hashes = (logs) => logs.map((l) => l.transactionHash).sort();
+
+  it("RPC đầu trả được cả khoảng thì chỉ một lời gọi, đủ event", async () => {
+    const full = counting((f) => base.getLogs(f));
+    const logs = await ui.getLogsRobust([full], addr, topics, deployBlock);
+    expect(hashes(logs)).to.deep.equal([...expected].sort());
+    expect(full.calls).to.equal(1);
+  });
+
+  it("RPC đầu đã xóa log cũ, RPC sau giới hạn khoảng: tự chuyển RPC và chia nhỏ khúc, không sót không trùng", async () => {
+    const pn = pruned(Number.MAX_SAFE_INTEGER), dr = limited(150);
+    const logs = await ui.getLogsRobust([pn, dr], addr, topics, deployBlock);
+    expect(hashes(logs)).to.deep.equal([...expected].sort());
+    expect(new Set(hashes(logs)).size).to.equal(logs.length);
+    expect(dr.calls).to.be.greaterThan(1);
+  });
+
+  it("mọi RPC đều đã xóa log cũ: NÉM LỖI kèm lý do, không trả mảng rỗng", async () => {
+    let err = null;
+    try { await ui.getLogsRobust([pruned(Number.MAX_SAFE_INTEGER), pruned(Number.MAX_SAFE_INTEGER)], addr, topics, deployBlock); }
+    catch (e) { err = e; }
+    expect(err, "phải ném lỗi").to.not.equal(null);
+    expect(err.message).to.include("pruned history unavailable");
+  });
+
+  it("mọi RPC giới hạn dưới LOG_MIN_CHUNK: chia tới mức tối thiểu rồi ném lỗi, không lặp vô hạn", async () => {
+    const tiny = limited(ui.LOG_MIN_CHUNK - 1);
+    let err = null;
+    try { await ui.getLogsRobust([tiny], addr, topics, deployBlock); } catch (e) { err = e; }
+    expect(err).to.not.equal(null);
+    expect(err.message).to.include("ranges over 10000 blocks");
+    expect(tiny.calls).to.be.lessThan(20);
+  });
+
+  it("phân loại lỗi: giới hạn khoảng thì chia khúc; lỗi pruned thì không (payload của ethers không bị đọc nhầm)", () => {
+    const e1 = { shortMessage: "could not coalesce error", error: { message: "pruned history unavailable" },
+      message: "could not coalesce error (payload={\"fromBlock\":\"0x1\",\"toBlock\":\"0x2\"})" };
+    expect(ui.RANGE_ERR.test(ui.rpcErrText(e1))).to.equal(false);
+    for (const m of ["ranges over 10000 blocks are not supported on free plan", "eth_getLogs is limited to 0 - 50 blocks range",
+      "query returned more than 10000 results", "Log response size exceeded"])
+      expect(ui.RANGE_ERR.test(ui.rpcErrText({ error: { message: m } })), m).to.equal(true);
+  });
+});

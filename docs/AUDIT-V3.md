@@ -949,7 +949,7 @@ block 11890480, Etherscan **Exact Match**, `INHERIT_DELAY` = 60 giây (cấu hì
 ### 19.3. Gas trên Sepolia khác số đo local: nâng cấp Glamsterdam
 
 Sepolia bật Glamsterdam ngày 06/10/2026 13:53:36 UTC (Ethereum Foundation, thông báo 17/09/2026); mainnet chưa có
-ngày. EIP-8037 trong nâng cấp này tính tạo state mới theo đồng hồ riêng, khoảng 1.530 gas/byte (bản nháp, còn Review).
+ngày. EIP-8037 trong nâng cấp này tính tạo state mới theo đồng hồ riêng, `CPSB` = 1.530 gas/byte (EIP-8037, trạng thái Last Call, hạn 01/11/2026 — *đính chính 12/10: bản trước ghi "Review" theo một nguồn thứ cấp*).
 Hardhat 2.29 mặc định hardfork **Osaka** — luật mainnet hiện hành. Cùng 8 thao tác (`seed-sepolia.js` chạy trên mạng
 Hardhat, `INHERIT_DELAY` = 60):
 
@@ -1055,6 +1055,142 @@ test (`before = { fake: true, genuine: false }`).
 `contracts/attack/IetStyleRegistry.sol` — bỏ chú thích lặp lại tên kịch bản, ghi chú lịch sử sửa lỗi, rút gọn đầu tệp.
 `app/app.js` và `contracts/CredentialRegistry.sol` không đổi trong đợt này.
 
+**Đính chính nguồn:** trạng thái EIP-8037 là *Last Call* (hạn 01/11/2026) theo văn bản EIP gốc, không phải *Review*;
+`docs/sepolia-evidence.md` và mục 19.3 trích thẳng EIP-8037 thay cho bài blog thứ cấp.
+
 **Quét lại:** 200 passing; coverage `CredentialRegistry.sol` 100 / 99,26 / 100 / 100; Slither 10 kết quả, 0 High/Medium;
 `page-integrity --check` khớp.
 
+
+## 22. Đợt 14 (15/10/2026) — đọc event bền trước giới hạn của RPC công cộng
+
+**Sự cố (14/10/2026).** Tab *Đơn vị phát hành* hiện "Chưa có đơn vị nào đang hoạt động" kèm lỗi
+`could not coalesce error`; *Chứng chỉ của tôi*, thống kê và nhật ký quản trị cũng không tải được.
+Contract và dữ liệu không sai. Đo thẳng `eth_getLogs` tới contract `0x672e…7F6` tại block 11.914.263:
+
+| RPC | Kết quả |
+|---|---|
+| `ethereum-sepolia-rpc.publicnode.com` | Lỗi 4444 `pruned history unavailable` khi đọc quanh `DEPLOY_BLOCK` (≈23.800 block, hơn 3 ngày trước). Kết quả lúc được lúc không giữa các lần gọi |
+| `sepolia.drpc.org` | HTTP 400 "ranges over 10000 blocks are not supported on free plan" — thực tế 101 block qua, 200 block bị từ chối |
+| `sepolia.gateway.tenderly.co` | Trả đủ log từ `DEPLOY_BLOCK` tới block mới nhất trong một lần gọi |
+| 1rpc.io / thirdweb / rpc.sepolia.org / blastapi / subquery | Giới hạn 50 block / 1 block / không kết nối được |
+
+Lúc deploy (11–12/10) `DEPLOY_BLOCK` còn trong khoảng publicnode giữ log nên không lộ ra. Bộ e2e dùng node local nên
+cũng không bắt được.
+
+**Mức độ: Trung bình.** Lỗi đọc event làm danh bạ **rỗng** và trang nói "chưa có đơn vị nào" — một kết luận sai
+mà người xác minh dễ tin. Xác minh chứng chỉ (`crossCall`) không bị ảnh hưởng vì đọc thẳng hàm view.
+
+**Sửa (chỉ giao diện; contract không đổi, md5 LF `535d2e31a682`):**
+1. `RPC_URLS` thêm `https://sepolia.gateway.tenderly.co` (không khóa API) và đặt **đầu** danh sách.
+   `connect-src` và SRI cập nhật bằng `page-integrity.js --release`.
+2. `getLogsRobust` thay cho hai vòng đọc cũ (`queryLogsChunked`, `scanEvents`): đọc lùi theo khúc 10.000 block;
+   mỗi khúc thử lần lượt từng RPC (ví đang kết nối trước, rồi `RPC_URLS`), RPC vừa thành công được thử trước ở khúc
+   sau; chỉ khi **mọi** RPC thất bại và có lỗi giới hạn khoảng thì chia đôi khúc (tối thiểu 100 block); lỗi khác
+   thì **ném lỗi** kèm lý do từng RPC. Phân loại lỗi chỉ đọc phần lõi (`error.message`, `info.responseBody`,
+   `shortMessage`), không đọc `e.message` vì ethers nhét cả payload vào đó.
+3. Danh bạ: khi không tải được event, trang báo "Không tải được danh bạ" kèm số đơn vị đang hoạt động đọc thẳng từ
+   `activeIssuerCount()`, **không** còn hiện "Chưa có đơn vị nào đang hoạt động".
+
+**Kiểm:** `test/UiShared.test.js` thêm 5 test đọc hàm thật trong `app.js` (RPC đầu đủ → 1 lời gọi; publicnode xóa
+log + dRPC giới hạn 150 block → đủ event, không sót không trùng; mọi RPC xóa log → ném lỗi; giới hạn < 100 block →
+dừng sau 8 lời gọi; phân loại lỗi). Chạy thật trên Sepolia trong trình duyệt (ethers 6.13.2, 15/10/2026):
+thứ tự của trang → 6 event, 3 lời gọi, ~2 s; chỉ publicnode → ném lỗi "pruned history unavailable" (không trả rỗng);
+bỏ Tenderly (publicnode + dRPC) → đủ 6 event, trùng khớp, 181 lời gọi, ~50 s.
+
+**Giới hạn còn lại (ghi vào bài):** luận điểm "chạy được khi không còn website của CredVerify" cho phần *xác minh*
+vẫn đúng; phần *danh bạ / lịch sử* phụ thuộc vào việc còn ít nhất một RPC giữ log cũ (RPC archive, indexer, hoặc tự
+chạy node). Một RPC trả thiếu event vẫn bị phát hiện qua đối chiếu `activeIssuerCount()` (mục 9); mỗi khúc chỉ đọc một RPC như trước, nên rủi ro "event giả nhưng đủ số" (mục 9, dòng 3) không đổi.
+
+**Quét lại:** 205 passing (200 + 5); coverage `CredentialRegistry.sol` 100 / 99,26 / 100 / 100 (không đổi);
+`page-integrity --check` khớp. Slither và fuzz không chạy lại vì contract không đổi. Bộ e2e Playwright chưa có trong
+repo (việc mở) nên thay bằng lần chạy thật trên Sepolia ở trên. `EVIDENCE.md` sinh lại: gas không đổi (deploy
+3.177.154); độ trễ đọc đo lại trên máy khác: trung vị `verifyCertificate` 3,17 ms (trước 3,44), `effectiveStatus`
+1,81 ms, `buildDirectory` 5,75 ms, băm PDF 776 KB 56,77 ms — chênh lệch là nhiễu máy đo, không phải do thay đổi.
+
+## 23. Đợt 15 (15/10/2026) — bộ e2e Playwright vào repo
+
+**Lý do.** Bộ e2e 17/17 của đợt 11 (mục 19.4) chỉ nằm trong container và đã mất; đợt 14 (`getLogsRobust`, báo
+"Không tải được danh bạ") chưa được kiểm trên trình duyệt (mục 22).
+
+**Làm gì.** Thêm `test/e2e/` (TypeScript, Playwright 1.64.1, Chromium) và script `npm run test:e2e`. Global setup dựng
+node Hardhat chainId 11155111 (`hardhat.e2e.config.cjs`) và tái dựng trạng thái Sepolia: mạo danh owner ở nonce 0 →
+contract `0x672e…7F6` tại block 11890480, 8 giao dịch của `scripts/seed-sepolia.js` ở block 11890480…11890494 (kiểm
+từng số). Lô 4 lá dựng lại từ salt trong `receipts/sepolia-demo/` (root `0x124f9509…` trùng Sepolia); không có thư mục
+đó thì sinh lô mới vào `test/e2e/.tmp/` (gitignore) — không salt nào vào repo. Playwright chặn ba origin trong
+`RPC_URLS` và chuyển JSON-RPC về node local; mọi request ra Internet khác bị chặn và đếm. ethers 6.13.2 phục vụ từ
+devDependency `ethers-cdn` (`npm:ethers@6.13.2`, sha384 trùng SRI trong `app/index.html`, global setup kiểm lại).
+Contract và `app/` không đổi.
+
+**Kiểm (19 ca):** `app.js` chạy dưới SRI · hằng neo đúng · độ trễ "1 phút" đọc từ contract · ethers qua SRI · cấp lẻ
+hợp lệ (3 RPC cùng kết quả) / đã thu hồi · tra theo tên gõ tay có khoảng trắng thừa · lô: lá hợp lệ / lá đã thu hồi /
+tệp bị sửa / biên nhận sửa chainId · danh bạ quét từ `DEPLOY_BLOCK` · **mới:** mọi RPC lỗi `eth_getLogs` → "Không tải
+được danh bạ", không hiện "Chưa có đơn vị nào" · **mới:** Tenderly + publicnode trả 4444, dRPC giới hạn 100 block →
+danh bạ vẫn đủ · 0 vi phạm CSP, 0 lỗi console, 0 request ra ngoài · RPC thứ hai chết → "Không kết luận được" ·
+`app.js` bị sửa → trình duyệt chặn · 390 px không cuộn ngang ở cả 6 tab.
+
+**Bẫy.** `npx hardhat test` nạp đệ quy mọi `.js/.cjs/.mjs` trong `test/` → spec e2e viết bằng `.ts`. `hardhat_mine`
+số lớn tạo block mà `eth_call` trả `0x` → seed đào thật 5 block cuối. Cổng node 8547, trang 8548.
+
+**Giới hạn.** Chỉ luồng đọc (không ví); các e2e cũ cho luồng ghi qua ví giả (mục 17–18) chưa dựng lại.
+
+## 24. Đợt 16 (15/10/2026) — `seed-sepolia.js` ghi tệp demo cạnh biên nhận
+
+**Lý do.** Ba tệp `lo-demo-1..3.txt` và chứng chỉ lẻ thứ hai được băm rồi bỏ, không ghi ra đĩa → muốn nạp lại vào
+giao diện phải tái tạo tay từng byte. Khi rà còn phát hiện script ghi cứng biên nhận vào `receipts/sepolia-demo/` kể cả
+trên mạng Hardhat → chạy thử local sẽ đè biên nhận (chứa salt) của lô thật.
+
+**Sửa.** Nội dung tệp demo định nghĩa một chỗ, dùng chung cho băm và ghi; ghi `lo-demo-1..3.txt`,
+`chung-chi-le-da-thu-hoi.txt` cạnh biên nhận, đọc lại và so keccak với giá trị đã lên chuỗi. Thư mục đích:
+`DEMO_OUT_DIR`, mặc định `receipts/hardhat-demo/` trên mạng local, `receipts/sepolia-demo/` trên testnet; dừng trước khi
+deploy nếu thư mục đã có biên nhận. `docs/sepolia-evidence.md` thêm một dòng chỉ chỗ để.
+
+**Kiểm.** Chạy trên mạng Hardhat (`INHERIT_DELAY_SECONDS=60`): đủ 4 biên nhận + `index.csv` + 4 tệp; tệp lẻ trùng byte
+bản Sepolia, tệp lô trùng byte sau khi thay địa chỉ contract; keccak khớp certHash. Chạy lại cùng thư mục bị chặn.
+
+**Còn mở.** Trên testnet script vẫn ghi đè toàn bộ `docs/sepolia-evidence.md` (mất phần viết tay) — cần sửa nếu deploy lại.
+
+## 25. Đợt 17 (15/10/2026) — đo lại kích thước biên nhận lô
+
+**Lý do.** Báo cáo tiến độ ghi biên nhận 1.617 byte, ghi chú cũ 1.620 byte; repo không lưu số đo.
+
+**Sửa.** Thêm `scripts/receipt-size.js` (dựng lô bằng `buildBatch`, ghi bằng `writeReceipts`, đọc lại byte trên đĩa);
+thêm mục 6 vào `docs/GAS-V3.md`. Không đổi contract, `app/`, `scripts/lib/batch.js`.
+
+**Kết quả.** Biên nhận = 806 + 74 × (số nút proof) byte; tối đa 880 / 1.324 / 1.472 / 1.620 byte, trung bình
+880,0 / 1.303,3 / 1.470,2 / 1.618,2 byte ở n = 2 / 100 / 500 / 2.000 (proof tối đa 1 / 7 / 9 / 11 nút). Khớp biên nhận
+demo Sepolia (954 byte, proof 2). "1.620 byte" = tối đa ở n = 2.000; "1.617" không tái lập được.
+
+**Còn mở.** Chạy lại `scripts/gas-v3.js` sẽ ghi đè cả `docs/GAS-V3.md`, mất mục 6. Cột "Độ dài proof" ở mục 2 là
+`getProof(0)` của một lá, không phải tối đa.
+
+## 26. Đợt 18 (15/10/2026) — phân tích độ bền trên L2 (chỉ tài liệu)
+
+**Lý do.** GĐ4 chốt không chuyển contract lên L2, chỉ phân tích các cửa sổ thời gian khi triển khai trên rollup có
+sequencer tập trung; tệp là nguồn cho bài báo và đầu vào cho quyết định sàn `INHERIT_DELAY` trên L2.
+
+**Thêm.** `docs/L2-ANALYSIS.md`. Nguồn gốc tra ngày 15/10/2026, kèm `eth_call` chỉ đọc trên Ethereum mainnet.
+
+**Kết quả chính.** Độ trễ cưỡng chế tối đa: Base 3.600 block L1 ≈ 12 giờ; Arbitrum One 24 giờ (SequencerInbox
+`maxTimeVariation`); Scroll 604.800 s = 7 ngày. Sàn `INHERIT_DELAY` 24 giờ có biên +12 h (Base), 0 h (Arbitrum),
+âm (Scroll); mặc định 48 giờ: +36 / +24 / âm. Arbitrum cho sequencer lùi dấu thời gian tới 24 giờ → khuyến nghị lùi
+`compromisedSince` thêm 24 giờ. Contract chỉ dùng `block.timestamp` nên không bị ảnh hưởng bởi nhịp block 200 ms của
+Base. EIP-4444 (Draft, bản 28/09/2026): lịch sử giữ 14.299 epoch ≈ 63,6 ngày; blob giữ 4.096 epoch ≈ 18,2 ngày.
+
+**Quét lại sau khi gộp đợt 15–18:** 205 passing; coverage `CredentialRegistry.sol` 100 / 99,26 / 100 / 100 (không
+đổi; md5 LF contract `535d2e31a682`); `npx hardhat clean` + compile lại; `page-integrity --check` khớp; e2e 19/19.
+Slither và fuzz không chạy lại vì contract không đổi. Số test Mocha không đổi → `EVIDENCE.md` không sinh lại.
+
+## 27. Đợt 19 (15/10/2026) — tab "Chứng chỉ của tôi" nói rõ giới hạn với chứng chỉ lô (T3, phương án B)
+
+**Lý do.** Tab lọc event `CertificateIssued` theo `holder`, nên chỉ thấy chứng chỉ cấp lẻ; lô Merkle không ghi ví học
+viên lên chuỗi (quyết định đã chốt: không index holder trong lô). Học viên chỉ có chứng chỉ lô thấy "Ví này chưa được
+cấp chứng chỉ nào" — sai về nghĩa, dễ hiểu là không có bằng.
+
+**Sửa.** `app/app.js`: câu rỗng đổi thành "Ví này chưa có chứng chỉ cấp lẻ nào"; thêm ghi chú `MINE_BATCH_NOTE` (cả khi
+có và không có kết quả) giải thích chứng chỉ lô không hiện ở đây và hướng sang tab Xác minh với tệp `.receipt.json`.
+`page-integrity.js --release` gắn lại SRI. Không đổi contract. Phương án A (nạp biên nhận vào tab) để công việc tiếp theo.
+
+**Kiểm.** e2e thêm 2 ca (20: ví có 2 chứng chỉ lẻ → bảng 2 dòng + ghi chú; 21: ví không có chứng chỉ lẻ → không còn câu
+cũ, có hướng dẫn biên nhận) → **21/21**. 205 passing; `page-integrity --check` khớp. Coverage, Slither, fuzz không chạy
+lại vì contract không đổi (`app/` không nằm trong coverage).

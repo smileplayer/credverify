@@ -142,8 +142,11 @@ let provider, signer, contract, account, contractAddress;
    block, và chỉ hiện "Hợp lệ" khi mọi RPC trả cùng một kết quả. Một RPC bị chiếm (hoặc trả
    sai) không còn tự quyết được kết luận. Khi deploy công khai, liệt kê 2–3 nhà cung cấp khác
    nhau VÀ thêm đúng các host đó vào connect-src của CSP ở đầu trang.
-   Phần tử đầu là RPC chính (danh bạ, nhật ký). */
-const RPC_URLS = ["https://ethereum-sepolia-rpc.publicnode.com", "https://sepolia.drpc.org"];   // chạy local: ["http://127.0.0.1:8545"]
+   Event (danh bạ, nhật ký, chứng chỉ của tôi) đọc qua getLogsRobust: thử lần lượt từng RPC,
+   phần tử đầu được thử trước. Tenderly đứng đầu vì là RPC công cộng duy nhất (đo 14/10/2026)
+   trả được log từ DEPLOY_BLOCK trong một lần gọi; publicnode đã xóa log cũ ("pruned history
+   unavailable"), dRPC gói miễn phí chỉ nhận khoảng ~100 block. */
+const RPC_URLS = ["https://sepolia.gateway.tenderly.co", "https://ethereum-sepolia-rpc.publicnode.com", "https://sepolia.drpc.org"];   // chạy local: ["http://127.0.0.1:8545"]
 let readProvider = null, readContract = null, readContracts = [];
 
 function initReadOnly() {
@@ -223,42 +226,75 @@ function nameProblem(name) {
   return null;
 }
 
+/* ---------- đọc event bền trước giới hạn của RPC công cộng ----------
+   RPC công cộng hay (a) giới hạn khoảng block của eth_getLogs (dRPC gói miễn phí: ~100 block)
+   hoặc (b) đã xóa log cũ (publicnode: "pruned history unavailable"). Đọc theo khúc, đi lùi từ
+   block mới nhất về DEPLOY_BLOCK. Mỗi khúc thử lần lượt từng RPC; RPC vừa thành công được thử
+   trước ở khúc sau. Chỉ khi KHÔNG RPC nào trả được VÀ có RPC báo lỗi giới hạn khoảng thì chia
+   đôi khúc (không dưới LOG_MIN_CHUNK). Còn lại thì NÉM LỖI kèm lý do từng RPC — tuyệt đối không
+   trả mảng rỗng, vì danh bạ rỗng sẽ bị đọc thành "chưa có đơn vị nào". */
 const BLOCK_CHUNK = 10000;
-async function queryLogsChunked(c, filter) {
-  const prov = c.runner?.provider || readProvider;
-  const latest = await prov.getBlockNumber();
-  const start = DEPLOY_BLOCK;
+const LOG_MIN_CHUNK = 100;
+const RANGE_ERR = /range|too many|exceed|limit|more than|response size/i;
+/** Phần lõi của lỗi RPC — KHÔNG lấy e.message vì ethers nhét cả payload (fromBlock/toBlock) vào đó. */
+function rpcErrText(e) {
+  const parts = [e?.error?.message, e?.info?.error?.message, e?.info?.responseBody, e?.shortMessage].filter(Boolean);
+  return String(parts.length ? parts.join(" | ") : e?.message || e).slice(0, 300);
+}
+async function getLogsRobust(provs, address, topics, fromBlock) {
+  if (!provs.length) throw new Error("không có RPC nào để đọc event");
+  let latest = null, lastErr = null;
+  for (const p of provs) {
+    try { latest = Number(await p.getBlockNumber()); break; } catch (e) { lastErr = e; }
+  }
+  if (latest == null) throw new Error("không RPC nào trả lời: " + rpcErrText(lastErr));
   const out = [];
-  let to = latest;
-  while (to >= start) {
-    const from = Math.max(start, to - BLOCK_CHUNK + 1);
-    out.push(...(await c.queryFilter(filter, from, to)));
-    if (from === start) break;
+  let to = latest, span = BLOCK_CHUNK, pref = 0;
+  while (to >= fromBlock) {
+    const from = Math.max(fromBlock, to - span + 1);
+    let got = null;
+    const errs = [];
+    for (let k = 0; k < provs.length && !got; k++) {
+      const i = (pref + k) % provs.length;
+      try {
+        got = await provs[i].getLogs({ address, topics, fromBlock: from, toBlock: to });
+        pref = i;
+      } catch (e) { errs.push(rpcErrText(e)); }
+    }
+    if (!got) {
+      if (span > LOG_MIN_CHUNK && errs.some((m) => RANGE_ERR.test(m))) {
+        span = Math.max(LOG_MIN_CHUNK, Math.ceil(span / 2));
+        continue;
+      }
+      throw new Error("không RPC nào trả được event block " + from + "–" + to + ": " + errs.join(" ; "));
+    }
+    out.push(...got);
+    if (from === fromBlock) break;
     to = from - 1;
+  }
+  return out;
+}
+/** Ví đang kết nối (nếu có) thử trước, rồi các RPC trong RPC_URLS theo thứ tự. */
+const logProviders = (c) => [...new Set([c?.runner?.provider, ...readContracts.map((x) => x.runner)].filter(Boolean))];
+function parseLogs(c, raw) {
+  const out = [];
+  for (const lg of raw) {
+    const p = c.interface.parseLog(lg);
+    if (p) out.push({ name: p.name, args: p.args, blockNumber: lg.blockNumber,
+      index: lg.index, transactionHash: lg.transactionHash });
   }
   return out.sort((a, b) => a.blockNumber - b.blockNumber || a.index - b.index);
 }
 
-/* Quét MỘT lần cho nhiều loại event (OR theo topic0) thay vì mỗi loại một lần —
-   số lời gọi RPC = (số block từ DEPLOY_BLOCK) / BLOCK_CHUNK, bất kể bao nhiêu loại event. */
+async function queryLogsChunked(c, filter) {
+  const topics = await filter.getTopicFilter();
+  return parseLogs(c, await getLogsRobust(logProviders(c), CONTRACT_ADDRESS, topics, DEPLOY_BLOCK));
+}
+
+/* Quét MỘT lần cho nhiều loại event (OR theo topic0) thay vì mỗi loại một lần. */
 async function scanEvents(c, names) {
-  const prov = c.runner?.provider || readProvider;
   const topics = [names.map((n) => c.interface.getEvent(n).topicHash)];
-  const latest = await prov.getBlockNumber();
-  const out = [];
-  let to = latest;
-  while (to >= DEPLOY_BLOCK) {
-    const from = Math.max(DEPLOY_BLOCK, to - BLOCK_CHUNK + 1);
-    const raw = await prov.getLogs({ address: CONTRACT_ADDRESS, topics, fromBlock: from, toBlock: to });
-    for (const lg of raw) {
-      const p = c.interface.parseLog(lg);
-      if (p) out.push({ name: p.name, args: p.args, blockNumber: lg.blockNumber,
-        index: lg.index, transactionHash: lg.transactionHash });
-    }
-    if (from === DEPLOY_BLOCK) break;
-    to = from - 1;
-  }
-  return out.sort((a, b) => a.blockNumber - b.blockNumber || a.index - b.index);
+  return parseLogs(c, await getLogsRobust(logProviders(c), CONTRACT_ADDRESS, topics, DEPLOY_BLOCK));
 }
 
 /* ---------- tiện ích ---------- */
@@ -419,7 +455,7 @@ const verifyFile = { hash: null, name: null };
    thiếu event, và trang phải nói ra điều đó. Cùng thuật toán với scripts/lib/directory.js. */
 const DIR_EVENTS = ["IssuerAdded", "IssuerRemoved", "IssuerRestored", "IssuerInherited"];
 const emptyDir = () => ({ keys: {}, addrs: [], names: [], inactive: [], recognizedBlock: {},
-  recognizedAt: {}, predecessor: {}, loadedAt: 0, logsError: null, countMismatch: null });
+  recognizedAt: {}, predecessor: {}, loadedAt: 0, logsError: null, countMismatch: null, onChainActive: null });
 let DIR = emptyDir();
 
 async function loadDirectory(force) {
@@ -454,6 +490,9 @@ async function loadDirectory(force) {
   } catch (e) {
     // KHÔNG nuốt im lặng: thiếu event thì thiếu danh bạ. Người dùng phải được biết.
     d.logsError = reasonOf(e);
+    // Số đơn vị đang hoạt động đọc THẲNG từ contract — để trang nói "có N đơn vị nhưng không
+    // tải được tên", thay vì để danh bạ rỗng bị hiểu thành "chưa có đơn vị nào".
+    try { d.onChainActive = Number(await c.activeIssuerCount()); } catch { }
   }
   d.loadedAt = Date.now();
   DIR = d;
@@ -1344,6 +1383,10 @@ async function signChallenge() {
 }
 
 /* ---------- chứng chỉ của tôi ---------- */
+// Lô Merkle không ghi ví học viên lên chuỗi (ví chỉ nằm trong biên nhận) nên tab này không thấy chứng chỉ lô.
+const MINE_BATCH_NOTE = '<p class="empty" data-mine-batch-note>Chứng chỉ cấp <b>theo lô</b> không hiện ở đây: ví học viên ' +
+  'chỉ nằm trong tệp biên nhận, không ghi lên chuỗi. Để kiểm, mở tab <b>Xác minh</b>, chọn tệp chứng chỉ và tệp biên nhận ' +
+  '(.receipt.json) do đơn vị cấp gửi.</p>';
 async function renderMine(writeLog) {
   const typed = ($("mineAddr").value || "").trim();
   const who = typed || account;
@@ -1360,7 +1403,7 @@ async function renderMine(writeLog) {
     const logs = (await queryLogsChunked(c, filter))
       .filter((l) => (l.args.holder || "").toLowerCase() === who.toLowerCase());
     if (!logs.length) {
-      $("mineOut").innerHTML = '<p class="empty">Ví này chưa được cấp chứng chỉ nào.</p>'; return;
+      $("mineOut").innerHTML = '<p class="empty">Ví này chưa có chứng chỉ <b>cấp lẻ</b> nào.</p>' + MINE_BATCH_NOTE; return;
     }
     const store = readJSON(KEY_STORE, {});
     let rows = "";
@@ -1385,7 +1428,7 @@ async function renderMine(writeLog) {
     }
     $("mineOut").innerHTML =
       "<table><thead><tr><th>Chứng chỉ</th><th>Đơn vị cấp</th><th>Ngày cấp</th><th>Trạng thái</th></tr></thead><tbody>" +
-      rows + "</tbody></table>";
+      rows + "</tbody></table>" + MINE_BATCH_NOTE;
     if (writeLog) logEntry({ op: "Xem chứng chỉ của tôi",
       detail: logs.length + " chứng chỉ của " + short(who, 8, 6) + " (chỉ đọc)" });
   } catch (err) {
@@ -1469,7 +1512,14 @@ async function renderDirectory() {
       : "";
 
     await ensureRecognizedAt(DIR.addrs);
-    if (!DIR.addrs.length) {
+    if (DIR.logsError) {
+      // Danh bạ dựng từ event; event không tải được thì KHÔNG được kết luận "chưa có đơn vị nào".
+      $("dirOut").innerHTML = '<div class="banner err" style="margin:0"><b>Không tải được danh bạ.</b> ' +
+        "Danh bạ dựng từ lịch sử event mà lần này không RPC nào trả được, nên trang <b>không</b> kết luận " +
+        "là chưa có đơn vị nào" + (DIR.onChainActive != null
+          ? ". Contract ghi <b>" + DIR.onChainActive + "</b> đơn vị đang hoạt động — chỉ danh sách tên là chưa hiện được"
+          : "") + ". Bấm <b>Tải lại</b> sau ít phút. Xác minh chứng chỉ vẫn đọc thẳng từ contract.</div>";
+    } else if (!DIR.addrs.length) {
       $("dirOut").innerHTML = '<p class="empty">Chưa có đơn vị nào đang hoạt động.</p>';
     } else {
       let rows = "";

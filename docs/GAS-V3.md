@@ -60,3 +60,15 @@ V2 chuyển giao trong MỘT giao dịch, có hiệu lực ngay. V3 tách thành
 
 Thu hồi lẻ đắt hơn V2 vì V3 ghi thêm khóa đã thu hồi (`certRevokedBy`, một slot) để vô hiệu được các lần thu hồi do khóa lộ. Thu hồi lô không đắt thêm: `revokedBy` nằm gọn trong slot còn trống của struct `Batch`.
 
+## 6. Kích thước tệp biên nhận lô
+
+Mục này **không** do `scripts/gas-v3.js` sinh; số lấy từ `node scripts/receipt-size.js` chạy ngày 2026-10-15 (chạy lại `gas-v3.js` sẽ ghi đè tệp này — khi đó dán lại bảng từ `receipt-size.js`). Script dựng lô bằng `buildBatch` và ghi bằng `writeReceipts` trong `scripts/lib/batch.js` — đúng đường mà `issue-batch.js` và `seed-sepolia.js` dùng — rồi đọc lại số byte của từng tệp `.receipt.json` trên đĩa (UTF-8, JSON thụt 2 dấu cách, LF, có dòng trống cuối). Các trường có độ dài thay đổi theo lô demo trên Sepolia: `issuerName` "Trung tam dao tao Demo", `blockNumber` 8 chữ số, `issuedAt` 10 chữ số; không gắn ví học viên (holder = 0x0…0, vẫn 42 ký tự). Salt ngẫu nhiên không đổi kích thước (luôn 32 byte hex).
+
+| n | Proof (nút) | Biên nhận nhỏ nhất (byte) | Lớn nhất (byte) | Trung bình (byte) | Tổng cả lô (byte) |
+|---:|---:|---:|---:|---:|---:|
+| 2 | 1 | 880 | 880 | 880,0 | 1.760 |
+| 100 | 6–7 | 1.250 | 1.324 | 1.303,3 | 130.328 |
+| 500 | 8–9 | 1.398 | 1.472 | 1.470,2 | 735.112 |
+| 2.000 | 10–11 | 1.546 | 1.620 | 1.618,2 | 3.236.448 |
+
+Mỗi nút proof thêm đúng 74 byte; biên nhận = 806 + 74 × (độ dài proof) byte với tên đơn vị trên (tên dài hơn k byte UTF-8 thì cộng k). Đối chiếu: lô demo Sepolia 4 chứng chỉ (proof 2 nút) có biên nhận 954 byte = 806 + 2 × 74. Cây `StandardMerkleTree` với n lá có độ sâu ⌈log₂ n⌉, nên một số lá có proof ngắn hơn một nút. Cột "Độ dài proof" ở mục 2 là proof của **một** lá (`getProof(0)`), không phải độ dài lớn nhất trong lô.
