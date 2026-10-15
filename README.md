@@ -395,6 +395,7 @@ scripts/issue-batch.js             -> cấp một thư mục tệp thành một 
 scripts/verify-receipt.js          -> xác minh tệp + biên nhận không cần trang web
 scripts/gas-v3.js                  -> đo gas thật: cấp lẻ × n so với lô, thu hồi, xoay khóa
 scripts/receipt-size.js            -> đo kích thước tệp biên nhận lô (n = 2…2.000), ghi vào docs/GAS-V3.md mục 6
+scripts/l2-fee-estimate.js         -> ước tính phí trên Base mainnet (chỉ đọc) → docs/L2-ANALYSIS.md mục 8
 scripts/lib/                       -> thư viện dùng chung (dựng cây Merkle, biên nhận, đọc hằng neo)
 scripts/collect-evidence.js        -> chạy kịch bản demo và sinh EVIDENCE.md
 scripts/seed-sepolia.js            -> dựng bằng chứng công khai trên testnet bằng một lệnh
@@ -617,7 +618,9 @@ Mainnet chưa có ngày kích hoạt, nên số gas trong `EVIDENCE.md` và `doc
 luật mainnet hiện hành. Bảng đối chiếu từng thao tác ở cuối `docs/sepolia-evidence.md`.
 
 **Triển khai trên L2:** xem `docs/L2-ANALYSIS.md` — Bảng 1 so các cửa sổ thời gian của contract với độ trễ forced
-inclusion của Base, Arbitrum One, Scroll; sàn 24 giờ của `INHERIT_DELAY` có biên 0 trên Arbitrum và âm trên Scroll.
+inclusion của Base, Arbitrum One, Scroll; sàn 24 giờ của `INHERIT_DELAY` có biên 0 trên Arbitrum và âm trên Scroll. Phí ước tính trên Base mainnet
+(15/10/2026): khoảng 0,001 USD cho mỗi `issueCertificate`/`publishBatch`/`revokeLeaf`, so với khoảng 0,01 USD trên
+Ethereum L1 cùng lúc — `npx hardhat run scripts/l2-fee-estimate.js` (chỉ đọc).
 
 ### 12.1. Indexer cho danh bạ, nhật ký và thống kê
 

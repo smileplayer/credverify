@@ -1194,3 +1194,22 @@ có và không có kết quả) giải thích chứng chỉ lô không hiện �
 **Kiểm.** e2e thêm 2 ca (20: ví có 2 chứng chỉ lẻ → bảng 2 dòng + ghi chú; 21: ví không có chứng chỉ lẻ → không còn câu
 cũ, có hướng dẫn biên nhận) → **21/21**. 205 passing; `page-integrity --check` khớp. Coverage, Slither, fuzz không chạy
 lại vì contract không đổi (`app/` không nằm trong coverage).
+
+## 28. Đợt 20 (15/10/2026) — ước tính phí trên Base (chỉ đọc)
+
+**Lý do.** `docs/L2-ANALYSIS.md` mục 8 để trống từ đợt 18; cần số phí thật cho phần Thảo luận của bài báo.
+
+**Sửa gì.** Thêm `scripts/l2-fee-estimate.js` (chỉ đọc): đo `gasUsed` + calldata của `issueCertificate`,
+`publishBatch` (lô 100, 500), `revokeLeaf` trên Hardhat in-process (salt tất định để tái lập calldata); đọc tại cùng
+một block Base mainnet `GasPriceOracle.getL1Fee` (tx EIP-1559 chưa ký, chainId 8453), base fee,
+`L1Block.operatorFeeScalar/Constant`; đối chiếu Ethereum L1 và giá Chainlink ETH/USD trên chuỗi. Điền mục 8 của
+`docs/L2-ANALYSIS.md` (công thức Fjord/Isthmus/Jovian, bảng phí ETH/USD kèm block và thời điểm, nguồn F1–F8 tra
+15/10/2026). Contract và `app/` không đổi.
+
+**Kết quả (Base block 52.635.373, ETH 2.360,06 USD).** Tổng phí trên Base ≈ 0,001 USD/giao dịch (`issueCertificate`
+0,00103; `publishBatch` 0,00102; `revokeLeaf` 0,000907–0,000930), Ethereum L1 cùng lúc 0,0085–0,0097 USD (≈ 9×; lần
+chạy thứ hai 11×). Phí L2 thực thi > 99 % tổng phí Base (base fee ở sàn 0,005 gwei). Do salt tất định, proof lá 0 ở lô
+100 dài 7 nút nên `revokeLeaf` = 63.570 gas (GAS-V3: 62.834 với proof 6 nút).
+
+**Kiểm gì.** Chạy script 2 lần (block 52.635.373 và 52.635.382): gas/calldata giống hệt; phí L1 của `publishBatch`
+khớp tính tay theo công thức Fjord. `npx hardhat test` 205 passing. Không chạy coverage (không đụng contract/test).
