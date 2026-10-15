@@ -32,7 +32,7 @@ function rows(n, tag) {
     out.push([
       ethers.keccak256(ethers.toUtf8Bytes(`${tag}-${i}.pdf`)),
       ethers.ZeroAddress,
-      ethers.hexlify(ethers.randomBytes(32)),
+      ethers.id(`salt-${tag}-${i}`),   // salt tất định: chạy lại ra đúng root, proof và gas
     ]);
   }
   return out;
@@ -49,7 +49,9 @@ async function main() {
 
   // ---------- Deploy ----------
   const v2 = await deploy("CredentialRegistryV2");
-  const v3 = await deploy("CredentialRegistry", 48 * 3600);   // độ trễ production; gas không phụ thuộc độ trễ
+  const v3 = await deploy("CredentialRegistry", 48 * 3600);   // độ trễ production
+  // Gas deploy phụ thuộc số byte khác 0 của tham số constructor (16 gas so với 4): đo thêm 60 giây để đối chiếu Sepolia.
+  const dep60 = (await (await deploy("CredentialRegistry", 60)).deploymentTransaction().wait()).gasUsed;
   const dep2 = (await v2.deploymentTransaction().wait()).gasUsed;
   const dep3 = (await v3.deploymentTransaction().wait()).gasUsed;
   const add2 = await used(v2.addIssuer(issuer.address, "Trung tam X"));
@@ -59,8 +61,10 @@ async function main() {
   md.push("");
   md.push("| Thao tác | V2 | V3 | Chênh |");
   md.push("|---|---:|---:|---:|");
-  md.push(`| Deploy contract | ${fmt(dep2)} | ${fmt(dep3)} | ${fmt(dep3 - dep2)} |`);
+  md.push(`| Deploy contract (\`INHERIT_DELAY\` 48 giờ) | ${fmt(dep2)} | ${fmt(dep3)} | ${fmt(dep3 - dep2)} |`);
   md.push(`| \`addIssuer\` (tên đầu tiên) | ${fmt(add2)} | ${fmt(add3)} | ${fmt(add3 - add2)} |`);
+  md.push("");
+  md.push(`Gas deploy V3 đổi theo \`INHERIT_DELAY\` vì calldata của tham số constructor: ${fmt(dep60)} với 60 giây (cấu hình demo trên Sepolia, dùng trong bảng đối chiếu của \`docs/sepolia-evidence.md\`), ${fmt(dep3)} với 48 giờ.`);
   md.push("");
   md.push("V3 ghi thêm `identityOf`, `latestKeyOf` (kiểm quyền thu hồi O(1), không trần số đời kế nhiệm) và không có mảng duyệt danh bạ (danh bạ dựng từ event), nên `addIssuer` gần ngang V2; `addIssuer` còn kiểm tên theo danh sách cho phép chữ tiếng Việt trong một vòng assembly. Deploy đắt hơn V2 vì thêm cấp theo lô, cơ chế khóa lộ, độ trễ chuyển giao và kiểm tên; custom error thay chuỗi revert bù một phần kích thước bytecode. `INHERIT_DELAY` là `immutable` (tham số constructor) nên đọc từ bytecode, không tốn SLOAD.");
   md.push("");
@@ -73,7 +77,7 @@ async function main() {
   md.push("");
   md.push(`Một lần \`issueCertificate\`: V2 = **${fmt(one2)}**, V3 = **${fmt(one3)}** gas (hàm không đổi). Cột "lẻ × n" dưới đây là tổng gas của **n giao dịch thật** trên V3, không phải nhân lên.`);
   md.push("");
-  md.push("| n | Cấp lẻ × n (tổng, V3) | Một lô `publishBatch` | Gas/chứng chỉ theo lô | Tiết kiệm | Độ dài proof |");
+  md.push("| n | Cấp lẻ × n (tổng, V3) | Một lô `publishBatch` | Gas/chứng chỉ theo lô | Tiết kiệm | Proof lá đầu (nút) |");
   md.push("|---:|---:|---:|---:|---:|---:|");
 
   const results = [];
@@ -93,7 +97,7 @@ async function main() {
     md.push(`| ${n} | ${fmt(single)} | ${fmt(batch)} | ${fmt(batch / BigInt(n))} | ${saving.toFixed(2)}% | ${proofLen} |`);
   }
   md.push("");
-  md.push("Gas của `publishBatch` không phụ thuộc n (chỉ ghi một bản ghi `Batch` gồm 2 slot; root nằm trong khóa `batchId` và event); chênh vài gas giữa các dòng là do số byte 0 trong calldata của root. Từ n = 1 lô đã ngang giá cấp lẻ; từ n = 2 rẻ hơn rõ rệt. Đổi lại, học viên phải giữ biên nhận (salt + proof) — xem mục 4 của docs/AUDIT-V3.md.");
+  md.push("Gas của `publishBatch` không phụ thuộc n (chỉ ghi một bản ghi `Batch` gồm 2 slot; root nằm trong khóa `batchId` và event); chênh vài gas giữa các dòng là do số byte 0 trong calldata của root. Từ n = 1 lô đã ngang giá cấp lẻ; từ n = 2 rẻ hơn rõ rệt. Đổi lại, học viên phải giữ biên nhận (salt + proof) — xem mục 4 của docs/AUDIT-V3.md. Cột cuối là proof của lá đầu tiên (`getProof(0)`), không phải độ dài lớn nhất trong lô (⌈log₂ n⌉ — xem mục 6).");
   md.push("");
 
   // ---------- Thu hồi ----------
@@ -130,7 +134,7 @@ async function main() {
   md.push("## 5. Xoay khóa");
   md.push("");
   const k = [];
-  for (let i = 0; i < 4; i++) k.push(ethers.Wallet.createRandom().address);
+  for (let i = 0; i < 4; i++) k.push(ethers.getAddress(ethers.dataSlice(ethers.id(`khoa-moi-${i}`), 12)));
   const DELAY = Number(await v3.INHERIT_DELAY());
   const inh2 = await used(v2.inheritIssuer(issuer.address, k[0]));
   const prop = await used(v3.proposeInherit(issuer.address, k[0], 0));
@@ -155,9 +159,15 @@ async function main() {
   md.push("Thu hồi lẻ đắt hơn V2 vì V3 ghi thêm khóa đã thu hồi (`certRevokedBy`, một slot) để vô hiệu được các lần thu hồi do khóa lộ. Thu hồi lô không đắt thêm: `revokedBy` nằm gọn trong slot còn trống của struct `Batch`.");
   md.push("");
 
+  // Mục 6 (kích thước biên nhận, số từ scripts/receipt-size.js) nằm sẵn trong tệp — giữ nguyên khi sinh lại.
+  const gasFile = path.join(__dirname, "..", "docs", "GAS-V3.md");
+  const prev = fs.existsSync(gasFile) ? fs.readFileSync(gasFile, "utf8") : "";
+  const keep = prev.indexOf("\n## 6. ");
+  if (keep >= 0) md.push(prev.slice(keep + 1).replace(/\n+$/, ""));
+
   const out = md.join("\n") + "\n";
   console.log(out);
-  fs.writeFileSync(path.join(__dirname, "..", "docs", "GAS-V3.md"), out, "utf8");
+  fs.writeFileSync(gasFile, out, "utf8");
   console.log("Đã ghi docs/GAS-V3.md");
 }
 

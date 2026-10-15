@@ -3,6 +3,17 @@
 const fs = require("fs");
 const path = require("path");
 
+// Đếm RPC thật trong app/app.js để EVIDENCE không ghi lệch số RPC của giao diện.
+function rpcSummary() {
+  try {
+    const src = fs.readFileSync(path.join(__dirname, "..", "..", "app", "app.js"), "utf8");
+    const m = src.match(/const RPC_URLS\s*=\s*\[([^\]]*)\]/);
+    const n = m ? (m[1].match(/"https?:\/\/[^"]+"/g) || []).length : 0;
+    const words = ["không", "một", "hai", "ba", "bốn", "năm"];
+    return (words[n] || String(n)) + " RPC công cộng độc lập";
+  } catch { return "RPC công cộng độc lập"; }
+}
+
 function sepoliaSection(file = path.join(__dirname, "..", "..", "docs", "sepolia-evidence.md")) {
   if (!fs.existsSync(file)) return "";
   const s = fs.readFileSync(file, "utf8");
@@ -21,7 +32,7 @@ function sepoliaSection(file = path.join(__dirname, "..", "..", "docs", "sepolia
   md += "| Block deploy (`DEPLOY_BLOCK`) | `" + block + "` |\n";
   if (delay) md += "| `INHERIT_DELAY` | `" + delay + "` giây — cấu hình demo; production 48 giờ |\n";
   if (deployGas) md += "| Gas deploy trên Sepolia | `" + deployGas + "` (luật Glamsterdam, xem dưới) |\n";
-  md += "| RPC của giao diện | hai RPC công cộng độc lập, không khóa API (`RPC_URLS` trong `app/app.js`) |\n\n";
+  md += "| RPC của giao diện | " + rpcSummary() + ", không khóa API (`RPC_URLS` trong `app/app.js`) |\n\n";
   md += "**Gas trên Sepolia khác Mục 9.2.** Sepolia bật nâng cấp Glamsterdam ngày 06/10/2026; EIP-8037 trong đó tính ";
   md += "giá tạo state mới (bytecode, ô storage, tài khoản) khoảng 1.530 gas mỗi byte, nên deploy đắt khoảng 7 lần và các ";
   md += "thao tác ghi đắt 2,4–4,1 lần. Mainnet chưa có ngày kích hoạt; Mục 9.2 đo trên Hardhat (hardfork Osaka) — ";

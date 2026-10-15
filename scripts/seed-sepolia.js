@@ -30,9 +30,10 @@ const EXPLORER = {
   421614: "https://sepolia.arbiscan.io",
 };
 
-// RPC công cộng không cần khóa API, hai nhà cung cấp độc lập.
+// RPC công cộng không cần khóa API, ba nhà cung cấp độc lập — trùng RPC_URLS trong app/app.js
+// (đợt 14: Tenderly đứng đầu vì trả đủ log từ DEPLOY_BLOCK trong một lần).
 const PUBLIC_RPCS = {
-  11155111: ["https://ethereum-sepolia-rpc.publicnode.com", "https://sepolia.drpc.org"],
+  11155111: ["https://sepolia.gateway.tenderly.co", "https://ethereum-sepolia-rpc.publicnode.com", "https://sepolia.drpc.org"],
 };
 
 // Nội dung các tệp demo sinh tại chỗ. Dùng CHUNG cho cả lúc băm (cấp trên chuỗi) và lúc ghi

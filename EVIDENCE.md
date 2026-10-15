@@ -1,6 +1,6 @@
 # EVIDENCE — CredVerify MVP
 
-Tệp này được sinh tự động bởi `scripts/collect-evidence.js`. Sinh lúc: 2026-10-15T01:01:47.493Z
+Tệp này được sinh tự động bởi `scripts/collect-evidence.js`. Sinh lúc: 2026-10-15T10:40:47.033Z
 
 Tái chạy toàn bộ: `npx hardhat node` (terminal 1), sau đó `npx hardhat run scripts/collect-evidence.js --network localhost` (terminal 2).
 
@@ -14,7 +14,7 @@ Tái chạy toàn bộ: `npx hardhat node` (terminal 1), sau đó `npx hardhat r
 | Lệnh khởi tạo mạng | `npx hardhat node` |
 | Phiên bản Solidity | `0.8.24` |
 | Hardhat | `^2.29.0` |
-| Node.js | `v22.22.0` |
+| Node.js | `v24.19.0` |
 
 ## 2. Hợp đồng đã triển khai
 
@@ -22,10 +22,10 @@ Tái chạy toàn bộ: `npx hardhat node` (terminal 1), sau đó `npx hardhat r
 |---|---|
 | Tên contract | `CredentialRegistry` |
 | Contract address | `0x5FbDB2315678afecb367f032d93F642f64180aa3` |
-| Deployment tx hash | `0xc632f28ad712e43917cabac4dcdfa8b86a6cf4c8f37b5bdd598e2437cfd158cc` |
+| Deployment tx hash | `0xb6519e75e296b3770fadfe52c946f9dcd04c48412cb2339895973f99865a44a3` |
 | Deployment block | `1` |
 | Gas deploy | `3177154` |
-| Độ trễ deploy | `27.17 ms` |
+| Độ trễ deploy | `18.54 ms` |
 | ABI | sinh ra tại `artifacts/contracts/CredentialRegistry.sol/CredentialRegistry.json` |
 
 ## 2b. Bản triển khai trên testnet công khai (Sepolia)
@@ -39,7 +39,7 @@ Giao diện trong repo (`app/app.js`) neo vào bản này. Chi tiết từng gia
 | Block deploy (`DEPLOY_BLOCK`) | `11890480` |
 | `INHERIT_DELAY` | `60` giây — cấu hình demo; production 48 giờ |
 | Gas deploy trên Sepolia | `22497316` (luật Glamsterdam, xem dưới) |
-| RPC của giao diện | hai RPC công cộng độc lập, không khóa API (`RPC_URLS` trong `app/app.js`) |
+| RPC của giao diện | ba RPC công cộng độc lập, không khóa API (`RPC_URLS` trong `app/app.js`) |
 
 **Gas trên Sepolia khác Mục 9.2.** Sepolia bật nâng cấp Glamsterdam ngày 06/10/2026; EIP-8037 trong đó tính giá tạo state mới (bytecode, ô storage, tài khoản) khoảng 1.530 gas mỗi byte, nên deploy đắt khoảng 7 lần và các thao tác ghi đắt 2,4–4,1 lần. Mainnet chưa có ngày kích hoạt; Mục 9.2 đo trên Hardhat (hardfork Osaka) — luật mainnet hiện hành. Bảng đối chiếu từng thao tác ở cuối `docs/sepolia-evidence.md`.
 
@@ -62,16 +62,16 @@ Lưu ý: `owner` **không** xuất hiện trong bất kỳ giao dịch cấp hay
 
 | Bước | Thao tác | Tx hash | Block | Gas | Độ trễ (ms) | Ghi chú |
 |---|---|---|---|---|---|---|
-| 2 | addIssuer — CredVerify công nhận Trung tâm X và gắn tên hiển thị | `0xf85b661a1d5bb40d0a4c4e54a89b15a3cd6359f98283d8471dec1b6be57b329a` | 2 | 167219 | 10.93 | tên phải là duy nhất |
-| 3 | issueCertificate — Trung tâm X cấp chứng chỉ cho học viên | `0x4b7e1b0be1a6723177efb7bed64456e4d8a4fdf89fe1ab18debe2bc89a709666` | 4 | 72755 | 9.84 | certId sinh tự động = keccak256(issuer ‖ certHash) |
-| 4 | issueCertificate — một đơn vị KHÁC đăng ký đúng tệp đó, bản ghi độc lập | `0xa8774897d342da0eadf850ed48cd32c890e1296d93393c802e66bef5c217e055` | 5 | 72755 | 9.11 | certId khác vì khóa gồm cả địa chỉ issuer |
-| 10 | revokeCertificate — Trung tâm X thu hồi chứng chỉ đã cấp | `0x663f3074be76118534345b81095e05206cb6dca4b244b042323b2c6590291dcd` | 12 | 61053 | 8.77 |  |
-| 12 | issueCertificate — kẻ tấn công dùng khóa đã lộ của Trung tâm X cấp một bằng giả | `0x915ddfe7cf386d6c0dea63d6206bcf6145671af038af8b7666fcd8025faed863` | 16 | 72755 | 10.52 |  |
-| 13 | revokeCertificate — kẻ tấn công thu hồi phá hoại một chứng chỉ THẬT | `0xc072e5040ce7efefeab7710ed72c14e865840736ebd201cea6f775773b34f58f` | 17 | 61053 | 10.65 |  |
-| 14 | removeIssuer — chặn khóa lộ NGAY, không chờ | `0x1d4514e9b9a9290e140f4c8f1826099bd26ade9b84906af46f35b5c33a58466b` | 18 | 57849 | 6.01 | hành động bảo vệ không qua độ trễ |
-| 15 | proposeInherit — đề xuất CÔNG KHAI chuyển danh tính sang khóa mới, kèm mốc lộ khóa | `0xb8767fa4d3d57eefe752e420f20a7e95900a0a06e23c9fc857267fc41c24bd16` | 20 | 83647 | 11.36 | phải chờ INHERIT_DELAY (tham số deploy; bằng chứng này dùng 48 giờ như production) |
-| 16 | executeInherit — sau INHERIT_DELAY: khóa mới nhận danh tính, ghi compromisedAt cho khóa lộ | `0x4617cb21cde2e110041da871db0ff22634daab2bfb4c15c744c56669d8ca4e9b` | 23 | 190795 | 13.09 | tên đi theo danh tính, không chép chuỗi |
-| 17 | revokeCertificate — khóa kế nhiệm dọn bằng giả do khóa cũ đã cấp | `0x23a051d84f7c5b0bfe3a00f52858b50d13c2ca9191428b7ebf367981bcaa2955` | 25 | 63053 | 7.29 |  |
+| 2 | addIssuer — CredVerify công nhận Trung tâm X và gắn tên hiển thị | `0xf85b661a1d5bb40d0a4c4e54a89b15a3cd6359f98283d8471dec1b6be57b329a` | 2 | 167219 | 8.97 | tên phải là duy nhất |
+| 3 | issueCertificate — Trung tâm X cấp chứng chỉ cho học viên | `0x4b7e1b0be1a6723177efb7bed64456e4d8a4fdf89fe1ab18debe2bc89a709666` | 4 | 72755 | 6.13 | certId sinh tự động = keccak256(issuer ‖ certHash) |
+| 4 | issueCertificate — một đơn vị KHÁC đăng ký đúng tệp đó, bản ghi độc lập | `0xa8774897d342da0eadf850ed48cd32c890e1296d93393c802e66bef5c217e055` | 5 | 72755 | 6.83 | certId khác vì khóa gồm cả địa chỉ issuer |
+| 10 | revokeCertificate — Trung tâm X thu hồi chứng chỉ đã cấp | `0x663f3074be76118534345b81095e05206cb6dca4b244b042323b2c6590291dcd` | 12 | 61053 | 4.32 |  |
+| 12 | issueCertificate — kẻ tấn công dùng khóa đã lộ của Trung tâm X cấp một bằng giả | `0x915ddfe7cf386d6c0dea63d6206bcf6145671af038af8b7666fcd8025faed863` | 16 | 72755 | 4.73 |  |
+| 13 | revokeCertificate — kẻ tấn công thu hồi phá hoại một chứng chỉ THẬT | `0xc072e5040ce7efefeab7710ed72c14e865840736ebd201cea6f775773b34f58f` | 17 | 61053 | 5.36 |  |
+| 14 | removeIssuer — chặn khóa lộ NGAY, không chờ | `0x1d4514e9b9a9290e140f4c8f1826099bd26ade9b84906af46f35b5c33a58466b` | 18 | 57849 | 4.29 | hành động bảo vệ không qua độ trễ |
+| 15 | proposeInherit — đề xuất CÔNG KHAI chuyển danh tính sang khóa mới, kèm mốc lộ khóa | `0x8e5f6e63e78d576bd21ed886d22ac42d1fad7faf54f51b7961ae62e063a7348f` | 20 | 83647 | 6.08 | phải chờ INHERIT_DELAY (tham số deploy; bằng chứng này dùng 48 giờ như production) |
+| 16 | executeInherit — sau INHERIT_DELAY: khóa mới nhận danh tính, ghi compromisedAt cho khóa lộ | `0x4617cb21cde2e110041da871db0ff22634daab2bfb4c15c744c56669d8ca4e9b` | 23 | 190795 | 6.11 | tên đi theo danh tính, không chép chuỗi |
+| 17 | revokeCertificate — khóa kế nhiệm dọn bằng giả do khóa cũ đã cấp | `0x23a051d84f7c5b0bfe3a00f52858b50d13c2ca9191428b7ebf367981bcaa2955` | 25 | 63053 | 4.31 |  |
 
 Cột độ trễ đo từ lúc gửi giao dịch tới khi nhận được receipt. Xem Mục 9 để biết phương pháp đo và giới hạn diễn giải của các con số này.
 
@@ -80,10 +80,10 @@ Cột độ trễ đo từ lúc gửi giao dịch tới khi nhận được rece
 | Event | Tham số | Tx hash |
 |---|---|---|
 | `IssuerAdded` | issuerAddress=0x70997970C51812dc3A010C7d01b50e0d17dc79C8, name=Trung tam dao tao X | `0xf85b661a1d5bb40d0a4c4e54a89b15a3cd6359f98283d8471dec1b6be57b329a` |
-| `CertificateIssued` | certId=0x0ba7ce87a6a098f2d3835b9c0ea70c3b67c26507ae64d973aecfac18da38244f, certHash=0x1719cc0ead2014d37a7c8ecd3890963023443e2ffde3ba38bbcb7cf3701a2c5e, issuer=0x70997970C51812dc3A010C7d01b50e0d17dc79C8, holder=0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65, issuedAt=1792026087 | `0x4b7e1b0be1a6723177efb7bed64456e4d8a4fdf89fe1ab18debe2bc89a709666` |
-| `CertificateRevoked` | certId=0x0ba7ce87a6a098f2d3835b9c0ea70c3b67c26507ae64d973aecfac18da38244f, by=0x70997970C51812dc3A010C7d01b50e0d17dc79C8, revokedAt=1792026096 | `0x663f3074be76118534345b81095e05206cb6dca4b244b042323b2c6590291dcd` |
-| `InheritProposed` | oldIssuer=0x70997970C51812dc3A010C7d01b50e0d17dc79C8, newIssuer=0x90F79bf6EB2c4f870365E785982E1f101E93b906, compromisedSince=1792026100, eta=1792198904 | `0xb8767fa4d3d57eefe752e420f20a7e95900a0a06e23c9fc857267fc41c24bd16` |
-| `KeyCompromised` | key=0x70997970C51812dc3A010C7d01b50e0d17dc79C8, since=1792026100 | `0x4617cb21cde2e110041da871db0ff22634daab2bfb4c15c744c56669d8ca4e9b` |
+| `CertificateIssued` | certId=0x0ba7ce87a6a098f2d3835b9c0ea70c3b67c26507ae64d973aecfac18da38244f, certHash=0x1719cc0ead2014d37a7c8ecd3890963023443e2ffde3ba38bbcb7cf3701a2c5e, issuer=0x70997970C51812dc3A010C7d01b50e0d17dc79C8, holder=0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65, issuedAt=1792060827 | `0x4b7e1b0be1a6723177efb7bed64456e4d8a4fdf89fe1ab18debe2bc89a709666` |
+| `CertificateRevoked` | certId=0x0ba7ce87a6a098f2d3835b9c0ea70c3b67c26507ae64d973aecfac18da38244f, by=0x70997970C51812dc3A010C7d01b50e0d17dc79C8, revokedAt=1792060836 | `0x663f3074be76118534345b81095e05206cb6dca4b244b042323b2c6590291dcd` |
+| `InheritProposed` | oldIssuer=0x70997970C51812dc3A010C7d01b50e0d17dc79C8, newIssuer=0x90F79bf6EB2c4f870365E785982E1f101E93b906, compromisedSince=1792060840, eta=1792233644 | `0x8e5f6e63e78d576bd21ed886d22ac42d1fad7faf54f51b7961ae62e063a7348f` |
+| `KeyCompromised` | key=0x70997970C51812dc3A010C7d01b50e0d17dc79C8, since=1792060840 | `0x4617cb21cde2e110041da871db0ff22634daab2bfb4c15c744c56669d8ca4e9b` |
 | `IssuerAdded` | issuerAddress=0x90F79bf6EB2c4f870365E785982E1f101E93b906, name=Trung tam dao tao X | `0x4617cb21cde2e110041da871db0ff22634daab2bfb4c15c744c56669d8ca4e9b` |
 | `IssuerInherited` | oldIssuer=0x70997970C51812dc3A010C7d01b50e0d17dc79C8, newIssuer=0x90F79bf6EB2c4f870365E785982E1f101E93b906, name=Trung tam dao tao X | `0x4617cb21cde2e110041da871db0ff22634daab2bfb4c15c744c56669d8ca4e9b` |
 
@@ -113,7 +113,7 @@ Nếu khóa chính là hash tệp trần thì lời gọi thứ hai sẽ **khóa
 
 ### 6.3. Dọn hậu quả sau khi khóa cấp bị lộ
 
-Kẻ gian giữ khóa của Trung tâm X cấp một bằng giả (#12) và thu hồi phá hoại một chứng chỉ thật (#13). Owner gỡ quyền khóa lộ ngay (#14), đề xuất chuyển giao kèm mốc lộ `compromisedSince = 1792026100` (#15), chờ INHERIT_DELAY rồi thực thi (#16).
+Kẻ gian giữ khóa của Trung tâm X cấp một bằng giả (#12) và thu hồi phá hoại một chứng chỉ thật (#13). Owner gỡ quyền khóa lộ ngay (#14), đề xuất chuyển giao kèm mốc lộ `compromisedSince = 1792060840` (#15), chờ INHERIT_DELAY rồi thực thi (#16).
 
 | Bản ghi | Thời điểm | valid | status | revocationVoided | issuedAfterCompromise |
 |---|---|---|---|---|---|
@@ -206,23 +206,23 @@ Nguyên tắc phân chia: **contract cưỡng chế cái gì phải ĐÚNG, giao
 | Thao tác ghi | Đo từ lúc gửi giao dịch tới khi `tx.wait()` trả về receipt |
 | Thao tác đọc | 30 mẫu mỗi thao tác, có một lần gọi khởi động bị loại bỏ trước khi đo |
 | Thống kê | Báo cả trung vị và p95 thay vì chỉ trung bình, vì trung bình bị kéo lệch bởi vài mẫu ngoại lai |
-| Máy đo | Node.js v22.22.0 trên mạng local Hardhat |
+| Máy đo | Node.js v24.19.0 trên mạng local Hardhat |
 
 ### 9.2. Thao tác ghi — gas và độ trễ
 
 | Thao tác | Gas | Độ trễ (ms) |
 |---|---|---|
-| Deploy contract | 3177154 | 27.17 |
-| addIssuer | 167219 | 10.93 |
-| issueCertificate | 72755 | 9.84 |
-| issueCertificate | 72755 | 9.11 |
-| revokeCertificate | 61053 | 8.77 |
-| issueCertificate | 72755 | 10.52 |
-| revokeCertificate | 61053 | 10.65 |
-| removeIssuer | 57849 | 6.01 |
-| proposeInherit | 83647 | 11.36 |
-| executeInherit | 190795 | 13.09 |
-| revokeCertificate | 63053 | 7.29 |
+| Deploy contract | 3177154 | 18.54 |
+| addIssuer | 167219 | 8.97 |
+| issueCertificate | 72755 | 6.13 |
+| issueCertificate | 72755 | 6.83 |
+| revokeCertificate | 61053 | 4.32 |
+| issueCertificate | 72755 | 4.73 |
+| revokeCertificate | 61053 | 5.36 |
+| removeIssuer | 57849 | 4.29 |
+| proposeInherit | 83647 | 6.08 |
+| executeInherit | 190795 | 6.11 |
+| revokeCertificate | 63053 | 4.31 |
 
 ### 9.3. Thao tác đọc — độ trễ
 
@@ -230,10 +230,10 @@ Các thao tác dưới đây không phát sinh giao dịch nên **chi phí gas b
 
 | Thao tác | Mẫu | Nhỏ nhất | Trung vị | Trung bình | p95 | Lớn nhất |
 |---|---|---|---|---|---|---|
-| verifyCertificate — nhà tuyển dụng xác minh khi ĐÃ BIẾT đơn vị cấp (đường O(1)) | 30 | 2.72 | 3.17 | 3.73 | 7.42 | 8.06 |
-| effectiveStatus — giao diện làm mới trạng thái HIỆU LỰC một chứng chỉ | 30 | 1.55 | 1.81 | 2.27 | 5.63 | 7.56 |
-| buildDirectory — giao diện dựng danh bạ đơn vị phát hành từ event | 30 | 4.33 | 5.75 | 6.63 | 14.38 | 20.26 |
-| keccak256 — băm tệp PDF trên máy người dùng (776 KB) | 30 | 55.21 | 56.77 | 60.05 | 76.48 | 82.18 |
+| verifyCertificate — nhà tuyển dụng xác minh khi ĐÃ BIẾT đơn vị cấp (đường O(1)) | 30 | 1.49 | 1.79 | 1.78 | 2.16 | 2.30 |
+| effectiveStatus — giao diện làm mới trạng thái HIỆU LỰC một chứng chỉ | 30 | 1.08 | 1.24 | 1.25 | 1.48 | 1.56 |
+| buildDirectory — giao diện dựng danh bạ đơn vị phát hành từ event | 30 | 2.96 | 3.48 | 3.50 | 4.35 | 4.42 |
+| keccak256 — băm tệp PDF trên máy người dùng (776 KB) | 30 | 40.54 | 42.10 | 44.20 | 58.49 | 64.62 |
 
 ### 9.4. Giới hạn diễn giải của các số đo này
 
@@ -246,223 +246,223 @@ Các thao tác dưới đây không phát sinh giao dịch nên **chi phí gas b
 
 Lệnh: `npx hardhat test`. Mỗi test deploy một contract mới qua `beforeEach` nên các test độc lập hoàn toàn.
 
-**Kết quả: 205 passing, 0 failing** (17036.42 ms).
+**Kết quả: 205 passing, 0 failing** (18425.90 ms).
 
 ```
 CredentialRegistry (bộ test V2, cập nhật cho V3)
     1. Công nhận đơn vị phát hành
-      ✔ owner công nhận được một trung tâm, kèm tên hiển thị (261ms)
-      ✔ BỊ CHẶN: người ngoài không công nhận được ai (65ms)
-      ✔ BỊ CHẶN: owner không tự cấp quyền phát hành cho chính địa chỉ owner (103ms)
-      ✔ BỊ CHẶN: tên rỗng (58ms)
-      ✔ BỊ CHẶN: một địa chỉ đã dùng thì không công nhận lại được dưới tên khác (57ms)
-      ✔ BẤT BIẾN: bật lại một khóa đã gỡ thì GIỮ NGUYÊN tên cũ (104ms)
-      ✔ BỊ CHẶN: không bật lại được một khóa đã chuyển giao cho người kế nhiệm (71ms)
+      ✔ owner công nhận được một trung tâm, kèm tên hiển thị (207ms)
+      ✔ BỊ CHẶN: người ngoài không công nhận được ai (79ms)
+      ✔ BỊ CHẶN: owner không tự cấp quyền phát hành cho chính địa chỉ owner (67ms)
+      ✔ BỊ CHẶN: tên rỗng (73ms)
+      ✔ BỊ CHẶN: một địa chỉ đã dùng thì không công nhận lại được dưới tên khác (84ms)
+      ✔ BẤT BIẾN: bật lại một khóa đã gỡ thì GIỮ NGUYÊN tên cũ (92ms)
+      ✔ BỊ CHẶN: không bật lại được một khóa đã chuyển giao cho người kế nhiệm (87ms)
     1a. Người không có quyền gọi hàm quản trị
-      ✔ BỊ CHẶN: người ngoài không gỡ quyền được ai (65ms)
-      ✔ BỊ CHẶN: người ngoài không bật lại được ai (61ms)
-      ✔ BỊ CHẶN: người ngoài không chuyển quyền owner được (56ms)
-      ✔ BỊ CHẶN: công nhận địa chỉ 0 làm đơn vị phát hành (64ms)
-      ✔ BỊ CHẶN: gỡ quyền một địa chỉ vốn không đang hoạt động (54ms)
-      ✔ BỊ CHẶN: bật lại một đơn vị vốn đang hoạt động (49ms)
-      ✔ BỊ CHẶN: chuyển giao danh tính sang địa chỉ 0 (46ms)
-      ✔ BỊ CHẶN: chuyển giao danh tính sang chính ví owner (65ms)
+      ✔ BỊ CHẶN: người ngoài không gỡ quyền được ai (104ms)
+      ✔ BỊ CHẶN: người ngoài không bật lại được ai (93ms)
+      ✔ BỊ CHẶN: người ngoài không chuyển quyền owner được (65ms)
+      ✔ BỊ CHẶN: công nhận địa chỉ 0 làm đơn vị phát hành (67ms)
+      ✔ BỊ CHẶN: gỡ quyền một địa chỉ vốn không đang hoạt động (71ms)
+      ✔ BỊ CHẶN: bật lại một đơn vị vốn đang hoạt động (58ms)
+      ✔ BỊ CHẶN: chuyển giao danh tính sang địa chỉ 0 (65ms)
+      ✔ BỊ CHẶN: chuyển giao danh tính sang chính ví owner (58ms)
     1b. Tên là duy nhất — chặn đường lạm quyền IM LẶNG
-      ✔ BỊ CHẶN: hai ví khác nhau KHÔNG mang được cùng một tên (53ms)
-      ✔ BẤT BIẾN: gỡ quyền một trung tâm KHÔNG trả tên đó lại cho người khác (71ms)
-      ✔ chuyển giao thì TÊN ĐI THEO khóa mới, và vẫn chỉ một chủ (67ms)
-      ✔ issuerByName() trả về địa chỉ 0 cho tên chưa ai đăng ký (45ms)
-      ✔ BẤT BIẾN: danh sách khả kiến không còn hai dòng trùng tên (88ms)
-      ✔ GIỚI HẠN ĐÃ BIẾT: tên khác chữ hoa/thường vẫn đăng ký được — so khớp theo byte (Kirin bị chặn) (86ms)
+      ✔ BỊ CHẶN: hai ví khác nhau KHÔNG mang được cùng một tên (68ms)
+      ✔ BẤT BIẾN: gỡ quyền một trung tâm KHÔNG trả tên đó lại cho người khác (87ms)
+      ✔ chuyển giao thì TÊN ĐI THEO khóa mới, và vẫn chỉ một chủ (75ms)
+      ✔ issuerByName() trả về địa chỉ 0 cho tên chưa ai đăng ký (61ms)
+      ✔ BẤT BIẾN: danh sách khả kiến không còn hai dòng trùng tên (94ms)
+      ✔ GIỚI HẠN ĐÃ BIẾT: tên khác chữ hoa/thường vẫn đăng ký được — so khớp theo byte (Kirin bị chặn) (84ms)
     2. Cấp chứng chỉ
-      ✔ HAPPY PATH: trung tâm cấp, bản ghi đúng, event đúng (60ms)
-      ✔ certIdOf() trên chuỗi khớp với giá trị client tự tính (47ms)
-      ✔ BỊ CHẶN: ví không có quyền cấp (68ms)
-      ✔ BỊ CHẶN: khóa đã bị gỡ quyền không cấp được nữa (71ms)
-      ✔ BỊ CHẶN: owner KHÔNG cấp được chứng chỉ — không có đường nào dẫn tới (51ms)
-      ✔ BỊ CHẶN: hash rỗng (56ms)
-      ✔ BỊ CHẶN: học viên là địa chỉ 0 (48ms)
+      ✔ HAPPY PATH: trung tâm cấp, bản ghi đúng, event đúng (56ms)
+      ✔ certIdOf() trên chuỗi khớp với giá trị client tự tính (51ms)
+      ✔ BỊ CHẶN: ví không có quyền cấp (48ms)
+      ✔ BỊ CHẶN: khóa đã bị gỡ quyền không cấp được nữa (53ms)
+      ✔ BỊ CHẶN: owner KHÔNG cấp được chứng chỉ — không có đường nào dẫn tới (48ms)
+      ✔ BỊ CHẶN: hash rỗng (52ms)
+      ✔ BỊ CHẶN: học viên là địa chỉ 0 (50ms)
       ✔ BỊ CHẶN: cùng một issuer cấp trùng một tệp hai lần (50ms)
     3. Không gian tên riêng trong sổ chung
-      ✔ BẤT BIẾN: issuer bất lương KHÔNG khóa cửa được trung tâm thật bằng cách đăng ký trước (97ms)
-      ✔ BẤT BIẾN: issuer khác KHÔNG thu hồi được chứng chỉ của trung tâm thật (52ms)
-      ✔ verifier chọn ĐÚNG đơn vị ghi trên chứng chỉ thì thấy đúng bản ghi của đơn vị đó (64ms)
-      ✔ CHỦ ĐÍCH: findByHash đã bị gỡ — không còn hàm view nào duyệt toàn bộ danh bạ (43ms)
+      ✔ BẤT BIẾN: issuer bất lương KHÔNG khóa cửa được trung tâm thật bằng cách đăng ký trước (60ms)
+      ✔ BẤT BIẾN: issuer khác KHÔNG thu hồi được chứng chỉ của trung tâm thật (54ms)
+      ✔ verifier chọn ĐÚNG đơn vị ghi trên chứng chỉ thì thấy đúng bản ghi của đơn vị đó (62ms)
+      ✔ CHỦ ĐÍCH: findByHash đã bị gỡ — không còn hàm view nào duyệt toàn bộ danh bạ (47ms)
     4. Thu hồi
-      ✔ HAPPY PATH: đúng khóa đã cấp thì thu hồi được, có dấu thời gian (61ms)
-      ✔ BẤT BIẾN: thu hồi là VĨNH VIỄN — không cấp lại được cùng tệp đó (57ms)
-      ✔ BỊ CHẶN: thu hồi hai lần (68ms)
-      ✔ BỊ CHẶN: thu hồi một chứng chỉ chưa từng tồn tại (44ms)
-      ✔ BỊ CHẶN: owner KHÔNG thu hồi được — quyền này không thuộc về đơn vị vận hành (43ms)
-      ✔ BỊ CHẶN: người lạ không thu hồi được (63ms)
-      ✔ BỊ CHẶN: khóa ĐÃ BỊ GỠ QUYỀN mất luôn quyền thu hồi (49ms)
+      ✔ HAPPY PATH: đúng khóa đã cấp thì thu hồi được, có dấu thời gian (55ms)
+      ✔ BẤT BIẾN: thu hồi là VĨNH VIỄN — không cấp lại được cùng tệp đó (54ms)
+      ✔ BỊ CHẶN: thu hồi hai lần (61ms)
+      ✔ BỊ CHẶN: thu hồi một chứng chỉ chưa từng tồn tại (49ms)
+      ✔ BỊ CHẶN: owner KHÔNG thu hồi được — quyền này không thuộc về đơn vị vận hành (50ms)
+      ✔ BỊ CHẶN: người lạ không thu hồi được (43ms)
+      ✔ BỊ CHẶN: khóa ĐÃ BỊ GỠ QUYỀN mất luôn quyền thu hồi (50ms)
     5. Xoay khóa khi bị lộ
       ✔ khóa kế nhiệm thu hồi được chứng chỉ do khóa cũ đã cấp (57ms)
-      ✔ chuyển giao chép TÊN sang khóa mới — trung tâm không mất danh tính (72ms)
-      ✔ BỊ CHẶN: khóa kế nhiệm ĐÃ BỊ GỠ cũng mất quyền thu hồi (79ms)
-      ✔ BỊ CHẶN: chỉ owner chuyển giao được danh tính issuer (55ms)
-      ✔ BỊ CHẶN: không chuyển giao sang một địa chỉ đã dùng làm issuer (47ms)
-      ✔ chuỗi kế nhiệm hai bậc: X -> K2 -> K3, K3 vẫn dọn được hậu quả của X (100ms)
-      ✔ CHỦ ĐÍCH: kế nhiệm chỉ chảy XUÔI — khóa cũ không thu hồi hộ khóa mới (74ms)
-      ✔ KỊCH BẢN ĐẦU-CUỐI: lộ khóa -> chuyển giao -> khóa cũ tê liệt -> khóa mới dọn hậu quả (90ms)
+      ✔ chuyển giao chép TÊN sang khóa mới — trung tâm không mất danh tính (59ms)
+      ✔ BỊ CHẶN: khóa kế nhiệm ĐÃ BỊ GỠ cũng mất quyền thu hồi (62ms)
+      ✔ BỊ CHẶN: chỉ owner chuyển giao được danh tính issuer (43ms)
+      ✔ BỊ CHẶN: không chuyển giao sang một địa chỉ đã dùng làm issuer (45ms)
+      ✔ chuỗi kế nhiệm hai bậc: X -> K2 -> K3, K3 vẫn dọn được hậu quả của X (75ms)
+      ✔ CHỦ ĐÍCH: kế nhiệm chỉ chảy XUÔI — khóa cũ không thu hồi hộ khóa mới (73ms)
+      ✔ KỊCH BẢN ĐẦU-CUỐI: lộ khóa -> chuyển giao -> khóa cũ tê liệt -> khóa mới dọn hậu quả (100ms)
     6. Xác minh
-      ✔ tệp đúng, chưa thu hồi -> hợp lệ, kèm tên đơn vị cấp (48ms)
-      ✔ tệp bị sửa một byte -> hash lệch -> KHÔNG hợp lệ (59ms)
-      ✔ đã thu hồi -> không hợp lệ, nhưng vẫn trả về MỐC THỜI GIAN thu hồi (49ms)
-      ✔ CHỦ ĐÍCH: xác minh KHÔNG bị chặn khi đơn vị cấp đã bị gỡ quyền (53ms)
-      ✔ BẤT BIẾN: người lạ không cần ví, không cần quyền gì để xác minh (40ms)
+      ✔ tệp đúng, chưa thu hồi -> hợp lệ, kèm tên đơn vị cấp (66ms)
+      ✔ tệp bị sửa một byte -> hash lệch -> KHÔNG hợp lệ (62ms)
+      ✔ đã thu hồi -> không hợp lệ, nhưng vẫn trả về MỐC THỜI GIAN thu hồi (50ms)
+      ✔ CHỦ ĐÍCH: xác minh KHÔNG bị chặn khi đơn vị cấp đã bị gỡ quyền (80ms)
+      ✔ BẤT BIẾN: người lạ không cần ví, không cần quyền gì để xác minh (73ms)
     7. Khả kiến — issuer thêm lén không còn vô hình
-      ✔ danh bạ dựng từ event trả về địa chỉ KÈM tên (67ms)
-      ✔ owner thêm một issuer lén thì nó HIỆN NGAY trong danh bạ (event IssuerAdded vĩnh viễn) (53ms)
+      ✔ danh bạ dựng từ event trả về địa chỉ KÈM tên (47ms)
+      ✔ owner thêm một issuer lén thì nó HIỆN NGAY trong danh bạ (event IssuerAdded vĩnh viễn) (50ms)
       ✔ danh bạ từ event giữ cả khóa đã gỡ và chuỗi kế nhiệm, phục vụ kiểm toán (70ms)
-      ✔ BẤT BIẾN: số đơn vị Active dựng từ event KHỚP activeIssuerCount trên chuỗi, qua mọi thao tác quản trị (142ms)
-      ✔ governance() trả về toàn bộ trạng thái quản trị trong một lời gọi (46ms)
+      ✔ BẤT BIẾN: số đơn vị Active dựng từ event KHỚP activeIssuerCount trên chuỗi, qua mọi thao tác quản trị (137ms)
+      ✔ governance() trả về toàn bộ trạng thái quản trị trong một lời gọi (47ms)
     8. Chuyển quyền owner
-      ✔ hai bước: đề nghị rồi bên nhận phải chấp nhận (71ms)
-      ✔ BỊ CHẶN: người không được chỉ định không nhận được quyền (52ms)
-      ✔ BỊ CHẶN: chuyển quyền cho địa chỉ 0 (47ms)
+      ✔ hai bước: đề nghị rồi bên nhận phải chấp nhận (66ms)
+      ✔ BỊ CHẶN: người không được chỉ định không nhận được quyền (50ms)
+      ✔ BỊ CHẶN: chuyển quyền cho địa chỉ 0 (50ms)
     9. Ranh giới quyền của đơn vị vận hành (đề bài mục 3 & 5.2)
-      ✔ BẤT BIẾN: owner gỡ quyền một trung tâm nhưng KHÔNG làm mất hiệu lực chứng chỉ đã cấp (47ms)
-      ✔ BẤT BIẾN: owner không có MỘT hàm nào ghi vào `certificates`
-      ✔ RỦI RO CÒN LẠI: owner cướp được danh tính một trung tâm đang hoạt động (58ms)
+      ✔ BẤT BIẾN: owner gỡ quyền một trung tâm nhưng KHÔNG làm mất hiệu lực chứng chỉ đã cấp (48ms)
+      ✔ BẤT BIẾN: owner không có MỘT hàm nào ghi vào `certificates` (42ms)
+      ✔ RỦI RO CÒN LẠI: owner cướp được danh tính một trung tâm đang hoạt động (68ms)
     10. Dọn dẹp sau sự cố — THỨ TỰ THAO TÁC QUYẾT ĐỊNH KẾT QUẢ
-      ✔ QUY TRÌNH ĐÚNG: chuyển giao (propose→execute) khi khóa xấu CÒN Active -> khóa dọn dẹp thu hồi được (70ms)
-      ✔ V3 — HẾT BẪY VẬN HÀNH: removeIssuer TRƯỚC rồi chuyển giao (propose→execute) vẫn chạy, khóa mới dọn được (71ms)
-      ✔ V3 — KHÔNG CẦN restoreIssuer: khóa lộ KHÔNG BAO GIỜ Active trở lại trong quá trình dọn (70ms)
-      ✔ R4 ĐÃ ĐÓNG: sau 9 lần chuyển giao, khóa mới nhất vẫn thu hồi được chứng chỉ đời đầu (159ms)
-      ✔ GIỚI HẠN (đường cấp lẻ): thu hồi TỪNG chứng chỉ một — cấp theo lô thì có revokeBatch (73ms)
+      ✔ QUY TRÌNH ĐÚNG: chuyển giao (propose→execute) khi khóa xấu CÒN Active -> khóa dọn dẹp thu hồi được (68ms)
+      ✔ V3 — HẾT BẪY VẬN HÀNH: removeIssuer TRƯỚC rồi chuyển giao (propose→execute) vẫn chạy, khóa mới dọn được (68ms)
+      ✔ V3 — KHÔNG CẦN restoreIssuer: khóa lộ KHÔNG BAO GIỜ Active trở lại trong quá trình dọn (73ms)
+      ✔ R4 ĐÃ ĐÓNG: sau 9 lần chuyển giao, khóa mới nhất vẫn thu hồi được chứng chỉ đời đầu (170ms)
+      ✔ GIỚI HẠN (đường cấp lẻ): thu hồi TỪNG chứng chỉ một — cấp theo lô thì có revokeBatch (64ms)
 
   CredentialRegistry V3 — tách quyền, xoay khóa, danh tính, lô, multisig (A–E)
     A. Bất biến owner ≠ issuer qua mọi lần chuyển quyền
-      ✔ BỊ CHẶN: transferOwnership cho một issuer đang hoạt động (40ms)
-      ✔ BỊ CHẶN: transferOwnership cho một khóa issuer đã bị gỡ (Disabled) (38ms)
-      ✔ BỊ CHẶN: addIssuer cho chính owner được đề cử (pendingOwner) (41ms)
-      ✔ BỊ CHẶN: chuyển giao (propose→execute) sang owner được đề cử (46ms)
-      ✔ BỊ CHẶN: đề cử X, đổi đề cử sang Y, công nhận X làm issuer, rồi X cố nhận quyền (68ms)
-      ✔ BẤT BIẾN: sau khi chuyển quyền hợp lệ, owner mới không cấp được và owner cũ thành người ngoài (69ms)
-      ✔ CHỦ ĐÍCH: owner cũ (đã chuyển quyền) CÓ THỂ được công nhận làm issuer (60ms)
+      ✔ BỊ CHẶN: transferOwnership cho một issuer đang hoạt động (42ms)
+      ✔ BỊ CHẶN: transferOwnership cho một khóa issuer đã bị gỡ (Disabled) (45ms)
+      ✔ BỊ CHẶN: addIssuer cho chính owner được đề cử (pendingOwner) (49ms)
+      ✔ BỊ CHẶN: chuyển giao (propose→execute) sang owner được đề cử (53ms)
+      ✔ BỊ CHẶN: đề cử X, đổi đề cử sang Y, công nhận X làm issuer, rồi X cố nhận quyền (55ms)
+      ✔ BẤT BIẾN: sau khi chuyển quyền hợp lệ, owner mới không cấp được và owner cũ thành người ngoài (64ms)
+      ✔ CHỦ ĐÍCH: owner cũ (đã chuyển quyền) CÓ THỂ được công nhận làm issuer (52ms)
     B. Xoay khóa từ trạng thái Disabled
-      ✔ chuyển giao (propose→execute) từ khóa Disabled: khóa mới Active, tên đi theo, đếm Active tăng 1 (74ms)
-      ✔ chuyển giao (propose→execute) từ khóa Active: đếm Active KHÔNG đổi, phát IssuerRemoved cho khóa cũ (61ms)
-      ✔ BỊ CHẶN: kế nhiệm một khóa đã từng được kế nhiệm (kể cả khi nó Disabled) (61ms)
-      ✔ BỊ CHẶN: kế nhiệm một địa chỉ chưa từng là issuer (40ms)
-      ✔ BẤT BIẾN: quá RECOVERY_WINDOW sau khi gỡ, danh tính ĐÓNG BĂNG — owner không bật lại, không chuyển giao được (105ms)
-      ✔ trong RECOVERY_WINDOW (sát hạn) vẫn bật lại / chuyển giao được (62ms)
-      ✔ CHỦ ĐÍCH: khóa ĐANG hoạt động thì chuyển giao không bị giới hạn thời gian (nhưng luôn qua độ trễ INHERIT_DELAY) (45ms)
-      ✔ BỊ CHẶN: restoreIssuer một khóa đã được kế nhiệm từ trạng thái Disabled (53ms)
+      ✔ chuyển giao (propose→execute) từ khóa Disabled: khóa mới Active, tên đi theo, đếm Active tăng 1 (67ms)
+      ✔ chuyển giao (propose→execute) từ khóa Active: đếm Active KHÔNG đổi, phát IssuerRemoved cho khóa cũ (55ms)
+      ✔ BỊ CHẶN: kế nhiệm một khóa đã từng được kế nhiệm (kể cả khi nó Disabled) (54ms)
+      ✔ BỊ CHẶN: kế nhiệm một địa chỉ chưa từng là issuer (44ms)
+      ✔ BẤT BIẾN: quá RECOVERY_WINDOW sau khi gỡ, danh tính ĐÓNG BĂNG — owner không bật lại, không chuyển giao được (76ms)
+      ✔ trong RECOVERY_WINDOW (sát hạn) vẫn bật lại / chuyển giao được (60ms)
+      ✔ CHỦ ĐÍCH: khóa ĐANG hoạt động thì chuyển giao không bị giới hạn thời gian (nhưng luôn qua độ trễ INHERIT_DELAY) (50ms)
+      ✔ BỊ CHẶN: restoreIssuer một khóa đã được kế nhiệm từ trạng thái Disabled (59ms)
     C. Danh tính issuer — O(1), không trần
-      ✔ identityOf / currentKeyOf đi theo chuỗi kế nhiệm (69ms)
-      ✔ tên lưu theo danh tính — mọi khóa trong chuỗi đọc ra cùng một tên, không chép chuỗi (69ms)
-      ✔ issuerName trả về chuỗi rỗng cho địa chỉ chưa từng là issuer
-      ✔ BỊ CHẶN: tên dài hơn MAX_NAME_BYTES (256 byte UTF-8); đúng 256 byte thì được (65ms)
-      ✔ currentKeyOf trả về address(0) cho địa chỉ chưa từng là issuer
-      ✔ BẤT BIẾN: hai danh tính khác nhau không thu hồi hộ nhau, kể cả sau khi xoay khóa (59ms)
-      ✔ BẤT BIẾN: tối đa MỘT khóa Active cho mỗi danh tính, qua 12 lần xoay (200ms)
+      ✔ identityOf / currentKeyOf đi theo chuỗi kế nhiệm (81ms)
+      ✔ tên lưu theo danh tính — mọi khóa trong chuỗi đọc ra cùng một tên, không chép chuỗi (73ms)
+      ✔ issuerName trả về chuỗi rỗng cho địa chỉ chưa từng là issuer (41ms)
+      ✔ BỊ CHẶN: tên dài hơn MAX_NAME_BYTES (256 byte UTF-8); đúng 256 byte thì được (60ms)
+      ✔ currentKeyOf trả về address(0) cho địa chỉ chưa từng là issuer (44ms)
+      ✔ BẤT BIẾN: hai danh tính khác nhau không thu hồi hộ nhau, kể cả sau khi xoay khóa (61ms)
+      ✔ BẤT BIẾN: tối đa MỘT khóa Active cho mỗi danh tính, qua 12 lần xoay (183ms)
     D1. Cấp theo lô — đăng và xác minh
-      ✔ leafOf() trên chuỗi khớp StandardMerkleTree của OpenZeppelin (off-chain) (59ms)
-      ✔ HAPPY PATH: đăng lô 8 chứng chỉ, mọi chứng chỉ xác minh hợp lệ trên chuỗi (89ms)
-      ✔ lô MỘT chứng chỉ: proof rỗng, vẫn xác minh được (46ms)
-      ✔ tệp bị sửa (certHash khác) -> KHÔNG hợp lệ (65ms)
-      ✔ sai salt hoặc sai holder -> KHÔNG hợp lệ (70ms)
-      ✔ proof của lá khác -> KHÔNG hợp lệ (45ms)
-      ✔ lô chưa đăng -> batchExists=false, valid=false (40ms)
-      ✔ BẤT BIẾN: lô của X tra dưới tên Y -> không tồn tại (không gian tên riêng) (46ms)
-      ✔ BẤT BIẾN: issuer khác đăng TRƯỚC cùng root cũng không chặn được trung tâm thật (51ms)
-      ✔ BẤT BIẾN: không thể dùng root làm 'lá' với proof rỗng (verifyInBatch tự tính lá) (48ms)
-      ✔ BẤT BIẾN: nút trong của cây không dùng làm lá được (băm hai lần) — chặn cả ở revokeLeaf (63ms)
+      ✔ leafOf() trên chuỗi khớp StandardMerkleTree của OpenZeppelin (off-chain) (62ms)
+      ✔ HAPPY PATH: đăng lô 8 chứng chỉ, mọi chứng chỉ xác minh hợp lệ trên chuỗi (114ms)
+      ✔ lô MỘT chứng chỉ: proof rỗng, vẫn xác minh được (47ms)
+      ✔ tệp bị sửa (certHash khác) -> KHÔNG hợp lệ (58ms)
+      ✔ sai salt hoặc sai holder -> KHÔNG hợp lệ (56ms)
+      ✔ proof của lá khác -> KHÔNG hợp lệ (49ms)
+      ✔ lô chưa đăng -> batchExists=false, valid=false (44ms)
+      ✔ BẤT BIẾN: lô của X tra dưới tên Y -> không tồn tại (không gian tên riêng) (51ms)
+      ✔ BẤT BIẾN: issuer khác đăng TRƯỚC cùng root cũng không chặn được trung tâm thật (55ms)
+      ✔ BẤT BIẾN: không thể dùng root làm 'lá' với proof rỗng (verifyInBatch tự tính lá) (47ms)
+      ✔ BẤT BIẾN: nút trong của cây không dùng làm lá được (băm hai lần) — chặn cả ở revokeLeaf (53ms)
     D2. Cấp theo lô — các trường hợp bị chặn
-      ✔ BỊ CHẶN: người không phải issuer đăng lô (39ms)
-      ✔ BỊ CHẶN: owner đăng lô (41ms)
-      ✔ BỊ CHẶN: khóa đã bị gỡ đăng lô (42ms)
-      ✔ BỊ CHẶN: root rỗng / lô rỗng / đăng trùng (54ms)
+      ✔ BỊ CHẶN: người không phải issuer đăng lô (45ms)
+      ✔ BỊ CHẶN: owner đăng lô (43ms)
+      ✔ BỊ CHẶN: khóa đã bị gỡ đăng lô (46ms)
+      ✔ BỊ CHẶN: root rỗng / lô rỗng / đăng trùng (53ms)
     D3. Thu hồi trong lô
-      ✔ HAPPY PATH: thu hồi một lá — lá đó mất hiệu lực, các lá khác vẫn hợp lệ (58ms)
-      ✔ HAPPY PATH: thu hồi cả lô — mọi lá mất hiệu lực (71ms)
-      ✔ revokedAt lấy mốc SỚM NHẤT khi lá bị thu hồi trước rồi cả lô bị thu hồi sau (69ms)
-      ✔ BỊ CHẶN: thu hồi lá không thuộc lô (proof sai) (58ms)
-      ✔ BỊ CHẶN: root không khớp batchId (62ms)
-      ✔ BỊ CHẶN: lô không tồn tại (65ms)
-      ✔ BỊ CHẶN: thu hồi lá hai lần / thu hồi lô hai lần / thu hồi lá sau khi cả lô đã thu hồi (82ms)
-      ✔ BỊ CHẶN: owner KHÔNG thu hồi được lá hay lô (63ms)
-      ✔ BỊ CHẶN: issuer khác KHÔNG thu hồi được lô của trung tâm thật (47ms)
-      ✔ BỊ CHẶN: khóa đã bị gỡ mất quyền thu hồi lô của chính mình (52ms)
-      ✔ KỊCH BẢN: khóa lộ đăng 3 lô giả -> gỡ -> chuyển giao -> khóa mới thu hồi 3 lô bằng 3 giao dịch (185ms)
-      ✔ CHỦ ĐÍCH: lô của khóa bị gỡ (không lộ) VẪN hợp lệ — gỡ quyền không viết lại quá khứ (95ms)
+      ✔ HAPPY PATH: thu hồi một lá — lá đó mất hiệu lực, các lá khác vẫn hợp lệ (64ms)
+      ✔ HAPPY PATH: thu hồi cả lô — mọi lá mất hiệu lực (83ms)
+      ✔ revokedAt lấy mốc SỚM NHẤT khi lá bị thu hồi trước rồi cả lô bị thu hồi sau (61ms)
+      ✔ BỊ CHẶN: thu hồi lá không thuộc lô (proof sai) (52ms)
+      ✔ BỊ CHẶN: root không khớp batchId (59ms)
+      ✔ BỊ CHẶN: lô không tồn tại (63ms)
+      ✔ BỊ CHẶN: thu hồi lá hai lần / thu hồi lô hai lần / thu hồi lá sau khi cả lô đã thu hồi (67ms)
+      ✔ BỊ CHẶN: owner KHÔNG thu hồi được lá hay lô (65ms)
+      ✔ BỊ CHẶN: issuer khác KHÔNG thu hồi được lô của trung tâm thật (44ms)
+      ✔ BỊ CHẶN: khóa đã bị gỡ mất quyền thu hồi lô của chính mình (56ms)
+      ✔ KỊCH BẢN: khóa lộ đăng 3 lô giả -> gỡ -> chuyển giao -> khóa mới thu hồi 3 lô bằng 3 giao dịch (161ms)
+      ✔ CHỦ ĐÍCH: lô của khóa bị gỡ (không lộ) VẪN hợp lệ — gỡ quyền không viết lại quá khứ (55ms)
     E. Issuer là một contract multisig (khuyến nghị chống gian lận nội bộ)
-      ✔ ví 2-trên-3 đăng lô và thu hồi lô; một chữ ký thì không đủ (99ms)
+      ✔ ví 2-trên-3 đăng lô và thu hồi lô; một chữ ký thì không đủ (90ms)
 
   CredentialRegistry V3 — khóa lộ, độ trễ chuyển giao, tên dạng chuẩn (S1–S7)
     PoC của bản kiểm toán — sau khi sửa
-      ✔ F-01 ĐÃ SỬA: khóa lộ thu hồi chứng chỉ thật; sau khi tuyên bố lộ, các lần thu hồi đó bị VÔ HIỆU (110ms)
-      ✔ F-02 KHÔNG CÒN ÁP DỤNG: findByHash đã gỡ; bản ghi trùng hash của issuer khác nằm trong không gian tên riêng (72ms)
-      ✔ F-03 ĐÃ SỬA: bằng giả do khóa lộ cấp sau mốc lộ bị gắn cờ issuedAfterCompromise (67ms)
+      ✔ F-01 ĐÃ SỬA: khóa lộ thu hồi chứng chỉ thật; sau khi tuyên bố lộ, các lần thu hồi đó bị VÔ HIỆU (89ms)
+      ✔ F-02 KHÔNG CÒN ÁP DỤNG: findByHash đã gỡ; bản ghi trùng hash của issuer khác nằm trong không gian tên riêng (58ms)
+      ✔ F-03 ĐÃ SỬA: bằng giả do khóa lộ cấp sau mốc lộ bị gắn cờ issuedAfterCompromise (51ms)
     S1. Vô hiệu thu hồi do khóa lộ
-      ✔ CHỦ ĐÍCH: thu hồi TRƯỚC mốc lộ (khóa còn trong tay chủ) giữ nguyên hiệu lực (98ms)
-      ✔ thu hồi của KHÓA KẾ NHIỆM (hợp lệ) không bị vô hiệu (62ms)
-      ✔ khóa hợp lệ thu hồi LẠI được một chứng chỉ có lần thu hồi đã bị vô hiệu (96ms)
-      ✔ lá: thu hồi lá do khóa lộ bị vô hiệu; khóa mới thu hồi lại được lá đó (91ms)
-      ✔ lô: thu hồi cả lô do khóa lộ bị vô hiệu; sau đó khóa mới thu hồi lá, rồi thu hồi lại cả lô (115ms)
-      ✔ revokedAt: lô thu hồi trước, lá thu hồi sau (khi lần thu hồi lô đã bị vô hiệu rồi lô bị thu hồi lại) (82ms)
+      ✔ CHỦ ĐÍCH: thu hồi TRƯỚC mốc lộ (khóa còn trong tay chủ) giữ nguyên hiệu lực (60ms)
+      ✔ thu hồi của KHÓA KẾ NHIỆM (hợp lệ) không bị vô hiệu (64ms)
+      ✔ khóa hợp lệ thu hồi LẠI được một chứng chỉ có lần thu hồi đã bị vô hiệu (79ms)
+      ✔ lá: thu hồi lá do khóa lộ bị vô hiệu; khóa mới thu hồi lại được lá đó (96ms)
+      ✔ lô: thu hồi cả lô do khóa lộ bị vô hiệu; sau đó khóa mới thu hồi lá, rồi thu hồi lại cả lô (90ms)
+      ✔ revokedAt: lô thu hồi trước, lá thu hồi sau (khi lần thu hồi lô đã bị vô hiệu rồi lô bị thu hồi lại) (66ms)
     S2. Cờ issuedAfterCompromise
-      ✔ lô cấp trước mốc lộ: cờ false; lô cấp sau mốc lộ: cờ true (71ms)
-      ✔ xoay khóa ĐỊNH KỲ (compromisedSince = 0): không gắn cờ, không vô hiệu gì, không phát KeyCompromised (51ms)
-      ✔ chứng chỉ không tồn tại / lô không tồn tại: cờ luôn false (51ms)
-      ✔ executeInherit phát KeyCompromised và ghi compromisedAt (47ms)
-      ✔ BỊ CHẶN: mốc lộ ở tương lai, hoặc lùi quá MAX_COMPROMISE_LOOKBACK (30 ngày) (52ms)
+      ✔ lô cấp trước mốc lộ: cờ false; lô cấp sau mốc lộ: cờ true (75ms)
+      ✔ xoay khóa ĐỊNH KỲ (compromisedSince = 0): không gắn cờ, không vô hiệu gì, không phát KeyCompromised (58ms)
+      ✔ chứng chỉ không tồn tại / lô không tồn tại: cờ luôn false (56ms)
+      ✔ executeInherit phát KeyCompromised và ghi compromisedAt (52ms)
+      ✔ BỊ CHẶN: mốc lộ ở tương lai, hoặc lùi quá MAX_COMPROMISE_LOOKBACK (30 ngày) (51ms)
     S3. Độ trễ chuyển giao danh tính (R1 / SC-03)
-      ✔ BỊ CHẶN: thực thi trước INHERIT_DELAY; đúng hạn thì chạy (57ms)
-      ✔ BỊ CHẶN: đề xuất quá PROPOSAL_TTL sau eta thì hết hiệu lực (41ms)
-      ✔ trong lúc chờ, khóa cũ VẪN hoạt động cho tới khi owner gỡ — gỡ quyền thì tức thì (92ms)
-      ✔ hủy đề xuất: phát InheritCancelled, không thực thi được nữa, đề xuất lại được (65ms)
-      ✔ BỊ CHẶN: người ngoài / issuer không đề xuất, thực thi hay hủy được (64ms)
-      ✔ kiểm lại lúc thực thi: khóa mới đã bị dùng làm issuer trong lúc chờ -> BỊ CHẶN (52ms)
-      ✔ kiểm lại lúc thực thi: khóa mới đã thành owner được đề cử trong lúc chờ -> BỊ CHẶN (51ms)
-      ✔ đề xuất tạo trong RECOVERY_WINDOW vẫn thực thi được dù lúc thực thi cửa sổ đã đóng (giới hạn bởi PROPOSAL_TTL) (55ms)
+      ✔ BỊ CHẶN: thực thi trước INHERIT_DELAY; đúng hạn thì chạy (62ms)
+      ✔ BỊ CHẶN: đề xuất quá PROPOSAL_TTL sau eta thì hết hiệu lực (46ms)
+      ✔ trong lúc chờ, khóa cũ VẪN hoạt động cho tới khi owner gỡ — gỡ quyền thì tức thì (66ms)
+      ✔ hủy đề xuất: phát InheritCancelled, không thực thi được nữa, đề xuất lại được (79ms)
+      ✔ BỊ CHẶN: người ngoài / issuer không đề xuất, thực thi hay hủy được (60ms)
+      ✔ kiểm lại lúc thực thi: khóa mới đã bị dùng làm issuer trong lúc chờ -> BỊ CHẶN (46ms)
+      ✔ kiểm lại lúc thực thi: khóa mới đã thành owner được đề cử trong lúc chờ -> BỊ CHẶN (47ms)
+      ✔ đề xuất tạo trong RECOVERY_WINDOW vẫn thực thi được dù lúc thực thi cửa sổ đã đóng (giới hạn bởi PROPOSAL_TTL) (53ms)
     S7. Vệ sinh mã
-      ✔ cancelOwnershipTransfer: xóa đề cử, địa chỉ đó lại được làm issuer (76ms)
-      ✔ BỊ CHẶN: tên không ở dạng chuẩn — khoảng trắng đầu (43ms)
-      ✔ BỊ CHẶN: tên không ở dạng chuẩn — khoảng trắng cuối (51ms)
-      ✔ BỊ CHẶN: tên không ở dạng chuẩn — hai khoảng trắng liền nhau (41ms)
-      ✔ BỊ CHẶN: tên không ở dạng chuẩn — ký tự xuống dòng (40ms)
-      ✔ BỊ CHẶN: tên không ở dạng chuẩn — tab (41ms)
-      ✔ BỊ CHẶN: tên không ở dạng chuẩn — DEL (0x7f) (38ms)
-      ✔ tên tiếng Việt có dấu (UTF-8 nhiều byte) và một ký tự đơn được chấp nhận; tra ngược theo tên chạy (53ms)
-      ✔ predecessorOf: từ khóa mới nhất (issuerByName) đi ngược được về khóa gốc chỉ bằng trạng thái (81ms)
+      ✔ cancelOwnershipTransfer: xóa đề cử, địa chỉ đó lại được làm issuer (63ms)
+      ✔ BỊ CHẶN: tên không ở dạng chuẩn — khoảng trắng đầu (38ms)
+      ✔ BỊ CHẶN: tên không ở dạng chuẩn — khoảng trắng cuối
+      ✔ BỊ CHẶN: tên không ở dạng chuẩn — hai khoảng trắng liền nhau (48ms)
+      ✔ BỊ CHẶN: tên không ở dạng chuẩn — ký tự xuống dòng (46ms)
+      ✔ BỊ CHẶN: tên không ở dạng chuẩn — tab (47ms)
+      ✔ BỊ CHẶN: tên không ở dạng chuẩn — DEL (0x7f) (50ms)
+      ✔ tên tiếng Việt có dấu (UTF-8 nhiều byte) và một ký tự đơn được chấp nhận; tra ngược theo tên chạy (44ms)
+      ✔ predecessorOf: từ khóa mới nhất (issuerByName) đi ngược được về khóa gốc chỉ bằng trạng thái (70ms)
       ✔ pragma được ghim (0.8.24), không còn ^
 
   CredentialRegistry V3 — danh sách cho phép tên, mốc công bố lộ, effectiveStatus (W–G)
     W. Danh sách cho phép tên tiếng Việt (V32-02)
-      ✔ nhận đủ 134 chữ có dấu tiếng Việt (dựng sẵn), chữ số, dấu cách, ( ) , - (63ms)
-      ✔ BỊ CHẶN: NBSP, ký tự vô hình, NFD, Kirin, Hy Lạp, dấu chấm, ký tự đặc biệt, gạch dài, tab (145ms)
-      ✔ BỊ CHẶN: chuỗi UTF-8 cụt hoặc byte tiếp nối ngoài dải (gửi byte thô) (132ms)
-      ✔ KHỚP: nameProblem() của script/giao diện và contract cho cùng kết luận trên 300 tên ngẫu nhiên (3526ms)
-      ✔ chuẩn hóa: tên dán từ PDF (NFD, NBSP, gạch dài, zero-width) ra đúng tên đã công nhận (39ms)
+      ✔ nhận đủ 134 chữ có dấu tiếng Việt (dựng sẵn), chữ số, dấu cách, ( ) , - (60ms)
+      ✔ BỊ CHẶN: NBSP, ký tự vô hình, NFD, Kirin, Hy Lạp, dấu chấm, ký tự đặc biệt, gạch dài, tab (104ms)
+      ✔ BỊ CHẶN: chuỗi UTF-8 cụt hoặc byte tiếp nối ngoài dải (gửi byte thô) (88ms)
+      ✔ KHỚP: nameProblem() của script/giao diện và contract cho cùng kết luận trên 300 tên ngẫu nhiên (3484ms)
+      ✔ chuẩn hóa: tên dán từ PDF (NFD, NBSP, gạch dài, zero-width) ra đúng tên đã công nhận (38ms)
     D. Độ trễ chuyển giao — bản thử nghiệm
-      ✔ INHERIT_DELAY = 60 giây, khớp helper của bộ test (48ms)
+      ✔ INHERIT_DELAY = 60 giây, khớp helper của bộ test
     C. Thời điểm công bố lộ khóa
-      ✔ ghi lúc executeInherit; trả trong verifyCertificate và verifyInBatch cùng mốc lộ (72ms)
-      ✔ xoay khóa định kỳ (không khai lộ): cả hai mốc bằng 0 (43ms)
+      ✔ ghi lúc executeInherit; trả trong verifyCertificate và verifyInBatch cùng mốc lộ (53ms)
+      ✔ xoay khóa định kỳ (không khai lộ): cả hai mốc bằng 0 (44ms)
     E. effectiveStatus (V32-04)
       ✔ None / Issued / Revoked hợp lệ giữ nguyên; thu hồi do khóa lộ -> Issued; getCertificate vẫn THÔ (75ms)
     G. PoC lượt 2
-      ✔ G-03 (RỦI RO GHIM, chấp nhận): owner vẫn 'hồi sinh' được thu hồi hợp pháp và gắn cờ bằng thật trong 30 ngày — nhưng mốc công bố lộ ra độ lùi (78ms)
-      ✔ G-04 (ĐÃ SỬA): NBSP, ZWSP, NFD không còn tạo được tên trông y hệt (41ms)
-      ✔ G-05 (GIỚI HẠN GHIM): bằng giả cấp trước mốc lookback 30 ngày không bị gắn cờ (68ms)
-      ✔ G-06 (ĐÃ SỬA một phần): getCertificate vẫn THÔ, nhưng effectiveStatus và verifyCertificate cho kết luận đúng (67ms)
+      ✔ G-03 (RỦI RO GHIM, chấp nhận): owner vẫn 'hồi sinh' được thu hồi hợp pháp và gắn cờ bằng thật trong 30 ngày — nhưng mốc công bố lộ ra độ lùi (68ms)
+      ✔ G-04 (ĐÃ SỬA): NBSP, ZWSP, NFD không còn tạo được tên trông y hệt (45ms)
+      ✔ G-05 (GIỚI HẠN GHIM): bằng giả cấp trước mốc lookback 30 ngày không bị gắn cờ (57ms)
+      ✔ G-06 (ĐÃ SỬA một phần): getCertificate vẫn THÔ, nhưng effectiveStatus và verifyCertificate cho kết luận đúng (61ms)
 
   CredentialRegistry V3 — thu hồi trong lô chỉ nhận lá thật (V34-01)
     V34-01. revokeLeaf chỉ thu hồi được LÁ THẬT
-      ✔ leafInnerOf khớp cách tính ngoài chuỗi; leafOf = keccak(leafInnerOf) = lá của OpenZeppelin (58ms)
-      ✔ nút trong ở MỌI tầng (kể cả root với proof rỗng) đều bị từ chối LeafNotInBatch (63ms)
+      ✔ leafInnerOf khớp cách tính ngoài chuỗi; leafOf = keccak(leafInnerOf) = lá của OpenZeppelin (73ms)
+      ✔ nút trong ở MỌI tầng (kể cả root với proof rỗng) đều bị từ chối LeafNotInBatch (50ms)
       ✔ gửi chính LÁ thay cho inner cũng bị từ chối — không ghi nhầm (39ms)
-      ✔ inner thật: thu hồi đúng chứng chỉ, sự kiện mang lá thật, các lá khác không đổi (74ms)
-      ✔ lô một chứng chỉ: root = lá; inner với proof rỗng thu hồi được, gửi root thì không (58ms)
-      ✔ inner KHÔNG lộ certHash/holder: không có muối thì không dò ngược được từ dữ liệu công khai (42ms)
+      ✔ inner thật: thu hồi đúng chứng chỉ, sự kiện mang lá thật, các lá khác không đổi (91ms)
+      ✔ lô một chứng chỉ: root = lá; inner với proof rỗng thu hồi được, gửi root thì không (49ms)
+      ✔ inner KHÔNG lộ certHash/holder: không có muối thì không dò ngược được từ dữ liệu công khai
 
   CredentialRegistry V3 — INHERIT_DELAY là tham số deploy (V341-01)
-    ✔ constructor nhận đúng khoảng [1 phút, 7 ngày] và lưu giá trị bất biến (147ms)
-    ✔ deploy 48 giờ: thực thi sớm bị chặn, đủ 48 giờ thì thực thi được (50ms)
-    ✔ độ trễ tối đa (7 ngày) vẫn thực thi được với đề xuất tạo trong RECOVERY_WINDOW sau khi gỡ (51ms)
+    ✔ constructor nhận đúng khoảng [1 phút, 7 ngày] và lưu giá trị bất biến (149ms)
+    ✔ deploy 48 giờ: thực thi sớm bị chặn, đủ 48 giờ thì thực thi được (47ms)
+    ✔ độ trễ tối đa (7 ngày) vẫn thực thi được với đề xuất tạo trong RECOVERY_WINDOW sau khi gỡ (46ms)
     scripts/lib/delay.js — quy tắc chọn độ trễ khi deploy
       ✔ mặc định 48 giờ trên mọi mạng
       ✔ mạng thử nghiệm cho phép độ trễ demo (60 giây, 1 giờ)
@@ -488,11 +488,11 @@ CredentialRegistry (bộ test V2, cập nhật cho V3)
     ✔ E8 đơn vị biến mất: đối chứng không còn xác minh được; CredVerify vẫn xác minh được
 
   Giao diện và script dùng cùng quy tắc
-    ✔ chuẩn hóa tên và danh sách cho phép: app.js giống hệt scripts/lib/name.js
-    ✔ cây Merkle dựng trong trình duyệt cho đúng root, lá và proof như OpenZeppelin StandardMerkleTree (570ms)
-    ✔ lá của trình duyệt khớp leafOf của contract; proof qua được verifyInBatch (63ms)
+    ✔ chuẩn hóa tên và danh sách cho phép: app.js giống hệt scripts/lib/name.js (67ms)
+    ✔ cây Merkle dựng trong trình duyệt cho đúng root, lá và proof như OpenZeppelin StandardMerkleTree (821ms)
+    ✔ lá của trình duyệt khớp leafOf của contract; proof qua được verifyInBatch (82ms)
     ✔ certId tính ở trình duyệt khớp certIdOf của contract
-    ✔ thống kê theo đơn vị dựng từ event: gom theo danh tính, đếm thu hồi bị vô hiệu như contract (132ms)
+    ✔ thống kê theo đơn vị dựng từ event: gom theo danh tính, đếm thu hồi bị vô hiệu như contract (105ms)
 
   Đọc event bền trước giới hạn của RPC công cộng (getLogsRobust)
     ✔ RPC đầu trả được cả khoảng thì chỉ một lời gọi, đủ event
@@ -643,9 +643,9 @@ Bộ 11 ảnh cũ chụp **giao diện V2** (còn mục "Nâng cao", ô "tra t�
 
 | Bước trong một lượt xác minh | MVP CredVerify | Baseline thủ công |
 |---|---|---|
-| Băm tệp trên máy nhà tuyển dụng | 56.77 ms | Không có bước này |
-| Tra cứu và đối chiếu | 3.17 ms (đọc on-chain) | Gửi văn bản / email cho đơn vị cấp rồi chờ phản hồi |
-| **Tổng thời gian** | **59.94 ms** (đo thực tế) | **Vài ngày tới hơn một tuần** (ước lượng từ nguồn thứ cấp — xem 13.2) |
+| Băm tệp trên máy nhà tuyển dụng | 42.10 ms | Không có bước này |
+| Tra cứu và đối chiếu | 1.79 ms (đọc on-chain) | Gửi văn bản / email cho đơn vị cấp rồi chờ phản hồi |
+| **Tổng thời gian** | **43.89 ms** (đo thực tế) | **Vài ngày tới hơn một tuần** (ước lượng từ nguồn thứ cấp — xem 13.2) |
 | Chi phí mỗi lượt xác minh | 0 gas (hàm `view`) | Nhân lực hai phía |
 | Kết quả có chắc chắn nhận được không? | Có — hàm luôn trả về một trong ba trạng thái | **Không** — có thể không nhận được phản hồi nào |
 | Cần đơn vị cấp còn hoạt động? | Không | Có |

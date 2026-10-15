@@ -51,7 +51,7 @@ Cùng thư mục có các tệp sinh tại chỗ để nạp lại vào giao di�
 const CONTRACT_ADDRESS  = "0x672e08DBF5Ce118a235E36C235b53Fa251dDe7F6";
 const EXPECTED_CHAIN_ID = 11155111n;
 const DEPLOY_BLOCK = 11890480;
-const RPC_URLS = ["https://ethereum-sepolia-rpc.publicnode.com", "<RPC độc lập thứ hai>"];   // đối chiếu ≥ 2 nhà cung cấp
+const RPC_URLS = ["https://sepolia.gateway.tenderly.co", "https://ethereum-sepolia-rpc.publicnode.com", "https://sepolia.drpc.org"];   // đối chiếu ≥ 2 nhà cung cấp, không khóa API (từ đợt 14)
 ```
 
 ## Đối chiếu gas: Sepolia (sau Glamsterdam) và luật hiện hành của mainnet

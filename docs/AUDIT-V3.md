@@ -1213,3 +1213,25 @@ chạy thứ hai 11×). Phí L2 thực thi > 99 % tổng phí Base (base fee ở
 
 **Kiểm gì.** Chạy script 2 lần (block 52.635.373 và 52.635.382): gas/calldata giống hệt; phí L1 của `publishBatch`
 khớp tính tay theo công thức Fjord. `npx hardhat test` 205 passing. Không chạy coverage (không đụng contract/test).
+
+## 29. Đợt 21 (15/10/2026) — rà khớp số liệu giữa các tài liệu (T7)
+
+**Lý do.** Rà README, EVIDENCE, docs/*.md (T7) thấy số lệch nhau hoặc lệch kết quả chạy thật; một phần do script
+sinh tài liệu dùng dữ liệu ngẫu nhiên nên mỗi lần chạy ra số hơi khác.
+
+**Sửa.**
+- `README.md`: số fuzz theo log gốc 11/10 (411/316/759 · 579/428/729, trước ghi số 09/10); "hai RPC" → ba RPC
+  (Tenderly, publicnode, dRPC); bỏ "một RPC" ở mục 12; gas deploy so với Sepolia ghi rõ cùng `INHERIT_DELAY` = 60 giây.
+- `scripts/gas-v3.js`: salt và khóa mới **tất định** (chạy hai lần ra tệp giống hệt, trước đây đổi theo lần chạy);
+  đo thêm gas deploy ở 60 giây (3.177.142) cạnh 48 giờ (3.177.154) — chênh do byte khác 0 của tham số constructor;
+  cột "Độ dài proof" đổi thành "Proof lá đầu (nút)" kèm chú thích; giữ nguyên mục 6 (biên nhận) khi sinh lại.
+  `docs/GAS-V3.md` sinh lại: `revokeLeaf` lô 10/50/100/500 = 61.314 / 62.847 / 63.606 / 64.328, `verifyInBatch`
+  46.271 … 53.401 (số mới tái lập được; số cũ trong các đợt trước là của salt ngẫu nhiên).
+- `scripts/lib/sepolia.js`: số RPC trong EVIDENCE mục 2b đếm từ `RPC_URLS` của `app/app.js`.
+  `scripts/seed-sepolia.js` và khối `RPC_URLS` mẫu trong `docs/sepolia-evidence.md`: ba RPC như giao diện.
+- `docs/GAS-BASELINE.md`: ghi chú số ở đây là trung bình gas reporter (V2 `issueCertificate` 72.697), khác GAS-V3
+  đo một lời gọi (72.673); so sánh nên lấy hai số cùng một tệp.
+- `EVIDENCE.md` sinh lại trên máy hiện tại (Node.js v24.19.0): số ms đổi theo máy đo.
+
+**Quét lại.** 205 passing; coverage `CredentialRegistry.sol` 100 / 99,26 / 100 / 100; clean + compile; `page-integrity
+--check` khớp; e2e 21/21; `gas-v3.js` chạy hai lần ra cùng tệp. Contract và `app/` không đổi.

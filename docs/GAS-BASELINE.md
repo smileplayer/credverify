@@ -4,6 +4,10 @@ Sinh lại bằng `npx hardhat test` với `gasReporter.enabled = true` trong `h
 
 Solc 0.8.24 · optimizer bật · `runs: 200`.
 
+Số ở đây là **trung bình của gas reporter** trên mọi lần gọi trong bộ test, nên có thể lệch vài chục gas so với
+`docs/GAS-V3.md` (đo **một** lời gọi bằng `scripts/gas-v3.js`, dữ liệu đầu vào khác — số byte 0 trong calldata khác).
+Ví dụ `issueCertificate` của V2: 72.697 ở đây, 72.673 ở GAS-V3. So sánh V2 ↔ V3 nên lấy cả hai số từ cùng một tệp.
+
 ---
 
 ## 1. Đường nóng: `issueCertificate`

@@ -125,9 +125,9 @@ cùng chuỗi lời gọi. Foundry chỉ dùng cho fuzz — biên dịch, test �
 Mỗi lượt ghi một dòng vào `cache-foundry/invariant-stats.txt` cho biết fuzz đã đi tới các nhánh khó
 (chuyển giao sau lộ khóa, thu hồi bị vô hiệu, danh tính đóng băng) hay chưa.
 
-Kết quả lần chạy gần nhất (09/10/2026, log gốc ở `docs/fuzz-report.txt`): **cả hai cấu hình đều pass**, mỗi cấu hình
-1000 lượt × 80 = 80.000 lời gọi, không bất biến nào bị phá. Số lượt (trên 1000) đi tới nhánh khó — 48 giờ:
-chuyển giao sau lộ khóa 395, thu hồi bị vô hiệu 315, danh tính đóng băng 782; 60 giây: 583 / 457 / 730.
+Kết quả lần chạy gần nhất (11/10/2026, Foundry 1.5.1, log gốc ở `docs/fuzz-report.txt`): **cả hai cấu hình đều pass**,
+mỗi cấu hình 1000 lượt × 80 = 80.000 lời gọi, không bất biến nào bị phá. Số lượt (trên 1000) đi tới nhánh khó — 48 giờ:
+chuyển giao sau lộ khóa 411, thu hồi bị vô hiệu 316, danh tính đóng băng 759; 60 giây: 579 / 428 / 729.
 Bộ fuzz do kiểm toán độc lập lượt 4 viết; khi cài lại 8 lỗi giả (gồm các lỗi cũ V2-01, V3-01, V34-01,
 SC-03) vào contract, fuzz bắt được cả 8 — chi tiết ở `docs/AUDIT-V3.md` mục 18.
 
@@ -240,8 +240,8 @@ duyệt chặn trên `file://` — luôn phục vụ qua HTTP.
 Giao diện **không nhận địa chỉ contract từ người dùng**. Địa chỉ, chainId và block deploy được ghi
 cố định trong mã nguồn trang — `app/app.js` (`CONTRACT_ADDRESS`, `EXPECTED_CHAIN_ID`, `DEPLOY_BLOCK`).
 
-**Bản trong repo neo vào contract trên Sepolia** (README mục 12.0, `EVIDENCE.md` mục 2b) và đọc qua hai RPC công cộng
-độc lập. Không có cách nào trỏ trang sang một contract khác ngoài sửa mã nguồn. Muốn chạy giao diện với mạng local:
+**Bản trong repo neo vào contract trên Sepolia** (README mục 12.0, `EVIDENCE.md` mục 2b) và đọc qua ba RPC công cộng
+độc lập (Tenderly, publicnode, dRPC). Không có cách nào trỏ trang sang một contract khác ngoài sửa mã nguồn. Muốn chạy giao diện với mạng local:
 
 1. `node scripts/page-integrity.js --dev` — gỡ SRI, nếu không trình duyệt sẽ chặn `app.js` vừa sửa;
 2. trong `app/app.js` đặt `CONTRACT_ADDRESS` theo dòng `scripts/deploy.js` in ra (Hardhat local deploy tất định ra
@@ -570,7 +570,7 @@ Nhóm 10 của bộ test V2 và mục B, D3 của bộ test V3 ghim đúng quy t
 
 ## 12. Hướng triển khai thật
 
-Bản trong repo chạy ở cấu hình **thử nghiệm** (mạng local/testnet, ví một khóa, một RPC; `INHERIT_DELAY` chọn lúc deploy).
+Bản trong repo chạy ở cấu hình **thử nghiệm** (mạng local/testnet, ví một khóa, RPC công cộng miễn phí; `INHERIT_DELAY` chọn lúc deploy).
 Khi đưa vào vận hành thật cần:
 
 | Hạng mục | Bản thử nghiệm | Triển khai thật | Ghi chú |
@@ -612,7 +612,7 @@ block 11890480, mã nguồn đã xác minh (Exact Match). `INHERIT_DELAY` = 60 g
 giao trong buổi bảo vệ; production dùng 48 giờ. Tám giao dịch mẫu (công nhận, cấp lẻ, thu hồi, đăng lô, thu hồi một lá)
 và trạng thái đọc lại ghi ở `docs/sepolia-evidence.md`; `app/app.js` đã neo vào bản này.
 
-**Gas trên Sepolia cao hơn số đo local** (deploy 22.497.316 so với 3.177.142; các thao tác ghi gấp 2,4–4,1 lần). Lý do:
+**Gas trên Sepolia cao hơn số đo local** (deploy 22.497.316 so với 3.177.142 ở cùng `INHERIT_DELAY` = 60 giây; các thao tác ghi gấp 2,4–4,1 lần). Lý do:
 Sepolia bật nâng cấp Glamsterdam ngày 06/10/2026, trong đó EIP-8037 tính giá tạo state mới khoảng 1.530 gas mỗi byte.
 Mainnet chưa có ngày kích hoạt, nên số gas trong `EVIDENCE.md` và `docs/GAS-V3.md` (Hardhat, hardfork Osaka) vẫn là
 luật mainnet hiện hành. Bảng đối chiếu từng thao tác ở cuối `docs/sepolia-evidence.md`.
